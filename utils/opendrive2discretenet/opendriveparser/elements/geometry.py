@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
-import abc
+import abc 
+import math
 import numpy as np
 from .eulerspiral import EulerSpiral
 
@@ -19,10 +20,11 @@ class Geometry(abc.ABC):
 
     __metaclass__ = abc.ABCMeta
 
-    def __init__(self, start_position: float, heading: float, length: float):
+    def __init__(self, start_position: float, heading: float, length: float,s):
         self._start_position = np.array(start_position)
         self._length = length
         self._heading = heading
+        self._s = s
 
     @property
     def start_position(self) -> float:
@@ -81,7 +83,16 @@ class Line(Geometry):
         tangent = self.heading
 
         return (pos, tangent)
+    
+    def calc_position2st(self,x,y):
+        dx = x - self.start_position[0]
+        dy = y - self.start_position[1]
 
+        # 旋转位移向量
+        s = dx * math.cos(self._heading) + dy * math.sin(self._heading)
+        t = -dx * math.sin(self._heading) + dy * math.cos(self._heading)
+        # dx_prime, dy_prime 就是转换后的参考线坐标
+        return s,t
 
 class Arc(Geometry):
     """This record describes an arc as part of the road’s reference line.
@@ -90,9 +101,9 @@ class Arc(Geometry):
     (Section 5.3.4.1.3 of OpenDRIVE 1.4)
     """
 
-    def __init__(self, start_position, heading, length, curvature):
+    def __init__(self, start_position, heading, length, curvature ,s):
         self.curvature = curvature
-        super().__init__(start_position=start_position, heading=heading, length=length)
+        super().__init__(start_position=start_position, heading=heading, length=length, s=s)
 
     def calc_position(self, s_pos):
         """
@@ -116,7 +127,34 @@ class Arc(Geometry):
         tangent = self.heading + s_pos * self.curvature
 
         return (pos, tangent)
+    
+    def calc_position2st(self,x,y):
+        # 起始点0为
+        x0 = self.start_position[0]
+        y0 = self.start_position[1]
 
+        flag = 1 if (self.curvature>0) else -1
+        radius = abs(1 / self.curvature) 
+
+        #圆心为(xc,yc)
+        xc =  self.start_position[0] - radius * math.sin( self._heading) * flag
+        yc =  self.start_position[1] + radius * math.cos( self._heading) * flag
+        
+        O = np.array([x0,y0])
+        X = np.array([x,y])
+        C = np.array([xc,yc])
+        CO = O - C 
+        CX = X - C 
+        
+        norm_CO = np.linalg.norm(CO)
+        norm_CX = np.linalg.norm(CX)
+        dot_product = np.dot(CO,CX)
+        
+        angle = np.arccos(dot_product / (norm_CO * norm_CX))
+
+        s = radius * angle
+        t = (radius - norm_CX) * flag
+        return s, t
 
 class Spiral(Geometry):
     """This record describes a spiral as part of the road’s reference line.
@@ -127,12 +165,12 @@ class Spiral(Geometry):
     (Section 5.3.4.1.2 of OpenDRIVE 1.4)
     """
 
-    def __init__(self, start_position, heading, length, curvStart, curvEnd):
+    def __init__(self, start_position, heading, length, curvStart, curvEnd,s):
         self._curvStart = curvStart
         self._curvEnd = curvEnd
 
         # 子类Spiral的init方法覆盖了父类Geometry的init，通过super().__init__()将父类init继承回来
-        super().__init__(start_position=start_position, heading=heading, length=length)
+        super().__init__(start_position=start_position, heading=heading, length=length, s=s)
 
         # EulerSpiral.createFromLengthAndCurvature为静态方法，不需要实例化类便可直接访问
         self._spiral = EulerSpiral.createFromLengthAndCurvature(
@@ -166,12 +204,12 @@ class Poly3(Geometry):
     (Section 5.3.4.1.4 of OpenDRIVE 1.4)
     """
 
-    def __init__(self, start_position, heading, length, a, b, c, d):
+    def __init__(self, start_position, heading, length, a, b, c, d,s):
         self._a = a
         self._b = b
         self._c = c
         self._d = d
-        super().__init__(start_position=start_position, heading=heading, length=length)
+        super().__init__(start_position=start_position, heading=heading, length=length,s=s)
 
         # raise NotImplementedError()
 
@@ -218,9 +256,9 @@ class ParamPoly3(Geometry):
     """
 
     def __init__(
-        self, start_position, heading, length, aU, bU, cU, dU, aV, bV, cV, dV, pRange
+        self, start_position, heading, length, aU, bU, cU, dU, aV, bV, cV, dV, pRange,s
     ):
-        super().__init__(start_position=start_position, heading=heading, length=length)
+        super().__init__(start_position=start_position, heading=heading, length=length, s=s)
 
         self._aU = aU
         self._bU = bU

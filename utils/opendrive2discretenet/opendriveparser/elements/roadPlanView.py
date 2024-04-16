@@ -2,6 +2,7 @@
 
 from typing import Tuple
 import numpy as np
+import math
 
 from .geometry import (
     Geometry,
@@ -44,7 +45,7 @@ class PlanView:
             self.should_precalculate -= 1
         self._add_geo_length(geometry.length)
 
-    def addLine(self, start_pos, heading, length):
+    def addLine(self, start_pos, heading, length,s):
         """添加线型为Line的区段对应的几何参数，以Line类对象append至PlanView类对象的geometries属性中
         Line类对象继承自抽象基类Geometry，传入三个参数：起始位置xy坐标、航向角、长度；且包含一个必须实现的基类方法calc_position(s_pos)，即基于s坐标计算对应xy坐标
 
@@ -54,9 +55,9 @@ class PlanView:
           length:
 
         """
-        self._add_geometry(Line(start_pos, heading, length), False)
+        self._add_geometry(Line(start_pos, heading, length,s), False)
 
-    def addSpiral(self, start_pos, heading, length, curvStart, curvEnd):
+    def addSpiral(self, start_pos, heading, length, curvStart, curvEnd,s):
         """
 
         Args:
@@ -67,9 +68,9 @@ class PlanView:
           curvEnd:
 
         """
-        self._add_geometry(Spiral(start_pos, heading, length, curvStart, curvEnd), True)
+        self._add_geometry(Spiral(start_pos, heading, length, curvStart, curvEnd,s), True)
 
-    def addArc(self, start_pos, heading, length, curvature):
+    def addArc(self, start_pos, heading, length, curvature,s):
         """
 
         Args:
@@ -79,10 +80,10 @@ class PlanView:
           curvature:
 
         """
-        self._add_geometry(Arc(start_pos, heading, length, curvature), True)
+        self._add_geometry(Arc(start_pos, heading, length, curvature,s), True)
 
     def addParamPoly3(
-        self, start_pos, heading, length, aU, bU, cU, dU, aV, bV, cV, dV, pRange
+        self, start_pos, heading, length, aU, bU, cU, dU, aV, bV, cV, dV, pRange,s
     ):
         """
 
@@ -103,12 +104,12 @@ class PlanView:
         """
         self._add_geometry(
             ParamPoly3(
-                start_pos, heading, length, aU, bU, cU, dU, aV, bV, cV, dV, pRange
+                start_pos, heading, length, aU, bU, cU, dU, aV, bV, cV, dV, pRange,s
             ),
             True,
         )
 
-    def addPoly3(self, start_pos, heading, length, a, b, c, d):
+    def addPoly3(self, start_pos, heading, length, a, b, c, d,s):
         """
 
         Args:
@@ -120,7 +121,7 @@ class PlanView:
           c:
           d:
         """
-        self._add_geometry(Poly3(start_pos, heading, length, a, b, c, d), True)
+        self._add_geometry(Poly3(start_pos, heading, length, a, b, c, d,s), True)
 
     # 储存构成该参考线的每种线形对应的长度
     def _add_geo_length(self, length: float):
@@ -278,3 +279,28 @@ class PlanView:
             self._precalculation[i] = (pos, coord[0], coord[1], tang)
         # end = time.time()
         # self.cache_time += end - start
+    def convert_to_reference_coordinates(self,x, y):
+        # # 计算位移
+        # dx = x - x0
+        # dy = y - y0
+
+        # # 将hed角度转换为弧度
+        # hed_rad = hed
+
+        # # 旋转位移向量
+        # dx_prime = dx * math.cos(hed_rad) - dy * math.sin(hed_rad)
+        # dy_prime = dx * math.sin(hed_rad) + dy * math.cos(hed_rad)
+
+        # # dx_prime, dy_prime 就是转换后的参考线坐标
+        # return dx_prime, dy_prime 
+      for geo in self._geometries:
+        if isinstance(geo,Line) or isinstance(geo,Arc):
+          s,t = geo.calc_position2st(x,y)
+          if (s <0 or s>geo._length):
+            continue
+          else:
+            return s+geo._s,t
+        else:
+          print(geo)
+          continue
+      return None,None

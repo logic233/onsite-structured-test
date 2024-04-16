@@ -92,9 +92,9 @@ class Arc(Geometry):
     (Section 5.3.4.1.3 of OpenDRIVE 1.4)
     """
 
-    def __init__(self, start_position, heading, length, curvature):
+    def __init__(self, start_position, heading, length, curvature,s):
         self.curvature = curvature
-        super().__init__(start_position=start_position, heading=heading, length=length)
+        super().__init__(start_position=start_position, heading=heading, length=length,, s=s)
 
     def calc_position(self, s_pos):
         """
@@ -129,11 +129,11 @@ class Spiral(Geometry):
     (Section 5.3.4.1.2 of OpenDRIVE 1.4)
     """
 
-    def __init__(self, start_position, heading, length, curvStart, curvEnd):
+    def __init__(self, start_position, heading, length, curvStart, curvEnd, s):
         self._curvStart = curvStart
         self._curvEnd = curvEnd
 
-        super().__init__(start_position=start_position, heading=heading, length=length)
+        super().__init__(start_position=start_position, heading=heading, length=length, s=s)
         self._spiral = EulerSpiral.createFromLengthAndCurvature(
             self.length, self._curvStart, self._curvEnd
         )
@@ -165,12 +165,12 @@ class Poly3(Geometry):
     (Section 5.3.4.1.4 of OpenDRIVE 1.4)
     """
 
-    def __init__(self, start_position, heading, length, a, b, c, d):
+    def __init__(self, start_position, heading, length, a, b, c, d,s):
         self._a = a
         self._b = b
         self._c = c
         self._d = d
-        super().__init__(start_position=start_position, heading=heading, length=length)
+        super().__init__(start_position=start_position, heading=heading, length=length, s=s)
 
         # raise NotImplementedError()
 
@@ -212,9 +212,9 @@ class ParamPoly3(Geometry):
     """
 
     def __init__(
-            self, start_position, heading, length, aU, bU, cU, dU, aV, bV, cV, dV, pRange
+            self, start_position, heading, length, aU, bU, cU, dU, aV, bV, cV, dV, pRange,s
     ):
-        super().__init__(start_position=start_position, heading=heading, length=length)
+        super().__init__(start_position=start_position, heading=heading, length=length,s=s)
 
         self._aU = aU
         self._bU = bU

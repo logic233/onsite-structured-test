@@ -145,13 +145,14 @@ def parse_opendrive_road_geometry(newRoad, road_geometry):
     """
 
     startCoord = [float(road_geometry.get("x")), float(road_geometry.get("y"))]  # 获取该区段起始位置的xy坐标
-
+    s = road_geometry.get("s")
     # Line直线的几何参数：起始位置xy坐标、航向角、区段对应参考线长度（抽象基类Geometry的传入参数）
     if road_geometry.find("line") is not None:
         newRoad.planView.addLine(
             startCoord,
             float(road_geometry.get("hdg")),
             float(road_geometry.get("length")),
+            float(s)
         )
 
     # Spiral欧拉螺线的几何参数：除Geometry的三参数外，还包括起始位置的曲率curvStart及终点位置的曲率curvEnd（沿着参考线，曲率从头至尾呈线性）
@@ -162,6 +163,7 @@ def parse_opendrive_road_geometry(newRoad, road_geometry):
             float(road_geometry.get("length")),
             float(road_geometry.find("spiral").get("curvStart")),
             float(road_geometry.find("spiral").get("curvEnd")),
+            float(s)
         )
 
     # Arc弧线的几何参数：除Geometry的三参数外，还包括参考线的曲率curvature（恒定）
@@ -171,6 +173,7 @@ def parse_opendrive_road_geometry(newRoad, road_geometry):
             float(road_geometry.get("hdg")),
             float(road_geometry.get("length")),
             float(road_geometry.find("arc").get("curvature")),
+            float(s)
         )
 
     # Poly3三次样条曲线：y(x) = a + b * x + c * x ** 2 + d * x ** 3
@@ -183,6 +186,7 @@ def parse_opendrive_road_geometry(newRoad, road_geometry):
             float(road_geometry.find("poly3").get("b")),
             float(road_geometry.find("poly3").get("c")),
             float(road_geometry.find("poly3").get("d")),
+            float(s)
         )
         # raise NotImplementedError()
 
@@ -212,6 +216,7 @@ def parse_opendrive_road_geometry(newRoad, road_geometry):
             float(road_geometry.find("paramPoly3").get("cV")),
             float(road_geometry.find("paramPoly3").get("dV")),
             pMax,
+            float(s)
         )
 
     else:

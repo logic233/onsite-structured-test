@@ -22,6 +22,18 @@ def parse_opendrive(path_opendrive: str) -> None:
         filter_types=["driving","biking", "onRamp", "offRamp", "exit", "entry", "sidewalk"])  # -> <class> DiscreteNetwork
     return open_drive_info
 
+def parse_opendrive2xml(path_opendrive: str) :
+    """
+    解析opendrive路网的信息，存储到self.replay_info.road_info。
+    """
+    with open(path_opendrive, 'r', encoding='utf-8') as fh:
+        root = etree.parse(fh).getroot()
+    
+    # 返回OpenDrive类的实例对象（经过parser.py解析）
+    openDriveXml = parse_opendrive_xml(root)
+
+    return openDriveXml
+
 def main():
     path_opendrive = r"H:\onsite结构化测试赛道\最新版本\onsite_structured_test\scenario\replay\intersection_12_61_0\intersection_12_61_0.xodr"
     road_info = parse_opendrive(path_opendrive)

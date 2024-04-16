@@ -12,7 +12,7 @@ from planner import PLANNER
 def main():
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-    with open('./config/tasks.yaml', 'r') as f:
+    with open('./config/tasks1.yaml', 'r') as f:
         tasks = yaml.safe_load(f)
     for mode, config in tasks.items():
         if mode != 'REPLAY':

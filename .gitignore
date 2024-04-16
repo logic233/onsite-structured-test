@@ -17,3 +17,6 @@
 /TessNG/WorkSpace/*
 
 *cache.json
+.vscode/launch.json
+
+main.py

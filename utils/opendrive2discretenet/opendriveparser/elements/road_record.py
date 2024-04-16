@@ -35,3 +35,10 @@ class RoadRecord(ABC):
         self.polynomial_coefficients = []
         for coeff in polynomial_coefficients:
             self.polynomial_coefficients.append(coeff)
+    def getAttr(self,s):
+        ds = s - self.start_pos
+        attr =  (self.polynomial_coefficients[0] + 
+                self.polynomial_coefficients[1] * ds+ 
+                self.polynomial_coefficients[2] * ds * ds+ 
+                self.polynomial_coefficients[3] * ds * ds * ds)
+        return attr
