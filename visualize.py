@@ -10,7 +10,7 @@ if __name__ == '__main__':
     print(os.listdir(FRAGMENT_FOLDER_PATH))
     vis = Visualizer()
     # vis.replay_result(result_path=result_path, save_path=save_path)
-    for task in os.listdir(REPLAY_FOLDER_PATH):
+    for task in os.listdir(FRAGMENT_FOLDER_PATH):
         print(task)
         vis.show_task(mode='FRAGMENT', task=task)
         # vis.show_task(mode='REPLAY', task=task)

@@ -4,6 +4,7 @@
 import numpy as np
 import pandas as pd
 import math
+import scipy
 from planner.plannerBase import PlannerBase
 from utils.observation import Observation
 from utils.opendrive2discretenet import parse_opendrive2xml
@@ -13,6 +14,7 @@ from utils.ScenarioManager import select_scenario_manager
 from utils.ScenarioManager.ScenarioInfo import ScenarioInfo
 
 from utils.opendrive2discretenet.opendriveparser.elements.geometry import Line
+import copy
 
 
 class LAUCH(PlannerBase):
@@ -39,7 +41,8 @@ class LAUCH(PlannerBase):
         self.scene_info = None      # 待可视化的场景信息
         self.road_info = None       # 通过parse_opendrive模块解析出的opendrive路网信息
         self.openDriveXml = None
-
+        self.lane_quad_list = []
+        self.lane_graph = None
     # 输出(x,y)在哪个road-lanesection-lane中
     def find_in_road_lanesection_lane(self,x,y):
         t_min = float("Inf")
@@ -51,42 +54,112 @@ class LAUCH(PlannerBase):
             # 除非是处在juction中 否则在唯一的lane中
             if (t != None ):
                  # 可能存在多个 roadOffse
-                laneOffset_need = None
+                laneOffset_may = None
                 t_offset = 0.0
                 for laneOffset in road.lanes.laneOffsets:
                     if (s >= laneOffset.start_pos ):
-                        laneOffset_need = laneOffset
-                if (laneOffset_need != None):
-                    t_offset = laneOffset_need.getAttr(s)
+                        laneOffset_may = laneOffset
+                if (laneOffset_may != None):
+                    t_offset = laneOffset_may.getAttr(s)
                 # 可能存在多个 lane_section
-                lane_section_need = None
+                lane_section_may = None
                 for lane_section in  road.lanes.lane_sections:
                     if ( s >= lane_section.sPos):
-                        lane_section_need = lane_section
+                        lane_section_may = lane_section
                 # t为正 左手方向 查left
-                lanes_to_search = lane_section_need.leftLanes if(t>=t_offset) else lane_section_need.rightLanes
+                lanes_to_search = lane_section_may.leftLanes if(t>=t_offset) else lane_section_may.rightLanes
                 
                 # 车道外边到中心线距离
                 lane_outer_distance = 0.0
-                lane_need = None
+                lane_may = None
                 # 依次按从内向外顺序查找line
                 for lane in lanes_to_search:
                     lane_width_value = 0.0
                     # 处理多端width情况
                     for lane_width in lane.widths:
-                        if (s>= lane_section_need.sPos + lane_width.start_pos):
+                        if (s>= lane_section_may.sPos + lane_width.start_pos):
                             # 由于getAttr只会减去自身的sPos
-                            lane_width_value = lane_width.getAttr(s-lane_section_need.sPos)
+                            lane_width_value = lane_width.getAttr(s-lane_section_may.sPos)
                     lane_outer_distance += lane_width_value
                     # 只要距中心线距离>= 当前外边到中心线距离 就返回
                     if (abs(t-t_offset)<= lane_outer_distance):
-                        lane_need = lane
+                        lane_may = lane
                         break
-                if lane_need !=None:
-                    print("lane_need",lane_need._parent_road.id,",",lane_section_need.idx,",",lane_need.id)
+                if lane_may !=None:
+                    ret = [lane_may._parent_road.id,lane_section_may.idx,lane_may.id,-1]
+                    print("lane_may",ret)
+                    return ret
+    
+    def lane_quad_maker(self,s):
+        ret =[]
+        for i in s.split('.'):
+            if i=='None':
+                return None
+            else:
+                ret.append(int(i))
+        return ret
+
+    def lane_graph_init(self ,road_info):
+        for dis_lane in road_info.discretelanes:
+            lane_quad = self.lane_quad_maker(dis_lane.lane_id) 
+            if lane_quad==None:
+                continue
+            self.lane_quad_list.append(lane_quad)
         
+        d_arr = np.zeros((len(self.lane_quad_list), len(self.lane_quad_list)))
+        # 根据dis_lane.successor 构造边 权值给10
+        successor_coneect_weight = 10
+        for dis_lane in road_info.discretelanes:
+            for succ_id in dis_lane.successor:
+                from_quad = self.lane_quad_maker(dis_lane.lane_id)
+                to_quad = self.lane_quad_maker(succ_id)
+                if(to_quad == None):
+                    continue
+                try:
+                    from_idx = self.lane_quad_list.index(from_quad)
+                    to_idx = self.lane_quad_list.index(to_quad)
+                except ValueError:
+                    continue
+                d_arr[from_idx][to_idx] = successor_coneect_weight
+                
+        # 相近车道 也构建边 权值 为100
+        neighbor_lane_weight = 100 
+        for lane_quad in self.lane_quad_list:
+            lane_quad_for_lane = lane_quad[2]
+            # 中心线应该不会出现 因此直接忽略
+            if lane_quad_for_lane == 0 :
+                continue
+            flag = 1 if lane_quad_for_lane>0 else -1
+            
+            lane_quad_target  = copy.copy(lane_quad)
+            # 通过外边找内边 并构建双向
+            if (abs(lane_quad_for_lane) > 1):
+                lane_quad_target[2]-=flag
+                if not (lane_quad_target in self.lane_quad_list):
+                    continue
+                from_idx = self.lane_quad_list.index(lane_quad)
+                to_idx = self.lane_quad_list.index(lane_quad_target)
+                d_arr[from_idx][to_idx] = neighbor_lane_weight
+                d_arr[to_idx][from_idx] = neighbor_lane_weight
+        d_arr_csr_matrix=scipy.sparse.csr_matrix(d_arr)
+        self.lane_graph = d_arr_csr_matrix
 
+    def lane_graph_route(self,start_quad,target_quad):
+        start_idx = self.lane_quad_list.index(start_quad)
+        target_idx = self.lane_quad_list.index(target_quad)
+        dist_matrix, predecessors = scipy.sparse.csgraph.dijkstra(self.lane_graph, return_predecessors=True, indices=start_idx)
 
+        # 存储从起点开始的路径集合
+        route_list = [target_quad]
+        pre_idx = target_idx
+        while True:
+            pre_idx = predecessors[pre_idx]
+            route_list.insert(0,self.lane_quad_list[pre_idx])
+            if (pre_idx == start_idx):
+                break
+        print("###############[route_list]###############")
+        print(route_list)
+        
     def init(self, scenario_dict):
         print("---------------------------- INIT----------------------------")
         print(scenario_dict['source_file']['xodr'])
@@ -97,12 +170,24 @@ class LAUCH(PlannerBase):
         # 返回OpenDrive类的实例对象（经过parser.py解析）
         road_info = parse_opendrive(scenario_dict['source_file']['xodr'])
         self.openDriveXml = parse_opendrive2xml(scenario_dict['source_file']['xodr'])
-
-        print("[startPOS]")
-        self.find_in_road_lanesection_lane(startPos[0],startPos[1])
-        print("[targetPos] mid")
-        self.find_in_road_lanesection_lane((targetPos[0][0]+targetPos[1][0])/2,(targetPos[0][1]+targetPos[1][1])/2)
+        # lane 拥有 lane_id 属性，为字符串形如1.0.-2.-1 
+        # 含义为Road 1 的 laneSection 0 的 lane -2  最后一位均为-1 含义未知
+        # 这儿将其转为 [1,0,-2,-1]形式 并依次存入self.dis_lane_id_list中
+        self.lane_graph_init(road_info)
         
+        
+       
+        #---------------------------------- [TEST OK] ----------------------------------#
+        print("[startPOS]")
+        start_quad= self.find_in_road_lanesection_lane(startPos[0],startPos[1])
+        print("[targetPos] mid")
+        target_quad= self.find_in_road_lanesection_lane((targetPos[0][0]+targetPos[1][0])/2,(targetPos[0][1]+targetPos[1][1])/2)
+
+        #---------------------------------- [TEST OK END] ----------------------------------#
+
+        self.lane_graph_route(start_quad,target_quad)
+        # 可能可以生成一系列导航点？
+        # road_info.discretelanes[0].center_vertices? 刚好是车道中点集合 用它？
         print("----------------------------------------------------------------")
         # parse_opendrive(scenario_dict['source_file']['xodr'])
 
