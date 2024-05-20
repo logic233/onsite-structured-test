@@ -7,14 +7,18 @@ import math
 import scipy
 from planner.plannerBase import PlannerBase
 from utils.observation import Observation
-from utils.opendrive2discretenet import parse_opendrive2xml
+from .myopendrive2discretenet import parse_opendrive2xml
 from utils.opendrive2discretenet import parse_opendrive
 from typing import List, Tuple
 from utils.ScenarioManager import select_scenario_manager
 from utils.ScenarioManager.ScenarioInfo import ScenarioInfo
 
-from utils.opendrive2discretenet.opendriveparser.elements.geometry import Line
 import copy
+from enum import Enum
+
+class act_state(Enum):
+    default = 1
+    change_lane = 2
 
 
 class LAUCH(PlannerBase):
@@ -43,6 +47,15 @@ class LAUCH(PlannerBase):
         self.openDriveXml = None
         self.lane_quad_list = []
         self.lane_graph = None
+        
+        # 存导航四元组
+        self.route_list = []
+        self.route_list_index = 0
+        # 当前所在四元组
+        self.lane_quad_act = []
+        self.st = None
+        self.act_state = act_state.default
+        self.change_lane_flag = 0
     # 输出(x,y)在哪个road-lanesection-lane中
     def find_in_road_lanesection_lane(self,x,y):
         t_min = float("Inf")
@@ -89,7 +102,25 @@ class LAUCH(PlannerBase):
                     ret = [lane_may._parent_road.id,lane_section_may.idx,lane_may.id,-1]
                     print("lane_may",ret)
                     return ret
-    
+   
+    def get_st(self,x,y):
+        l = self.find_in_road_lanesection_lane(x,y)
+        if l == None :
+            return None
+
+        for road in self.openDriveXml.roads:
+            if road.id == l[0]:
+                return road._planView.convert_to_reference_coordinates(x,y)
+
+    def get_heading(self,x,y):
+        l = self.find_in_road_lanesection_lane(x,y)
+        if l == None :
+            return None
+        for road in self.openDriveXml.roads:
+            if road.id == l[0]:
+                s,t = self.get_st(x,y)
+                return road._planView.get_hed(s)
+
     def lane_quad_maker(self,s):
         ret =[]
         for i in s.split('.'):
@@ -159,6 +190,7 @@ class LAUCH(PlannerBase):
                 break
         print("###############[route_list]###############")
         print(route_list)
+        self.route_list = route_list
         
     def init(self, scenario_dict):
         print("---------------------------- INIT----------------------------")
@@ -201,6 +233,30 @@ class LAUCH(PlannerBase):
 
 
     def act(self, observation: Observation):
+        print("======act====\n",observation)
+        print(self.act_state)
+        dt = observation.test_info['dt']
+        
+        print("===st===")
+        self.lane_quad_act = self.find_in_road_lanesection_lane(observation.ego_info.x , observation.ego_info.y)
+        print(self.lane_quad_act)
+        self.st = self.get_st(observation.ego_info.x , observation.ego_info.y)
+        print(self.st)
+        yaw_planView = self.get_heading(observation.ego_info.x , observation.ego_info.y)
+        
+        if (yaw_planView == None):
+            yaw_planView = observation.ego_info.yaw
+        if yaw_planView< 0 :
+            yaw_planView +=  2 * math.pi
+        
+        print("===head===")
+        print(yaw_planView)
+        
+        if self.route_list_index < len(self.route_list) - 1 and self.lane_quad_act != self.route_list[self.route_list_index] :
+            self.route_list_index +=1
+            if   self.lane_quad_act != self.route_list[self.route_list_index]:
+                print("[error] 跑偏" )
+        
         # 加载主车信息
         frame = pd.DataFrame(
             vars(observation.ego_info),
@@ -214,7 +270,31 @@ class LAUCH(PlannerBase):
                 frame = pd.concat([frame, sub_frame])
         state = frame.to_numpy()
 
-        return [self.deside_acc(state), 0]
+
+        # decide rot
+        yaw_target = yaw_planView
+       
+        # yaw_target = yaw +  v / (length / 1.7 ) * tan (rot) * dt
+        #[保险起见]
+        k = 1
+        tan_target = ( yaw_target - observation.ego_info.yaw ) / observation.ego_info.v * (observation.ego_info.length / 1.7) /  dt
+        rot_target = math.atan(tan_target)
+        if self.act_state == act_state.change_lane :
+            rot_target = self.change_lane_flag * 0.1
+        # [动力学约束]  -0.7 <= 前轮转角 <= 0.7
+        rot_target = np.clip (rot_target , -0.7 * k , 0.7 * k)
+
+        
+        
+        max_rot_dt = dt * 1.4
+        max_rot =  observation.ego_info.rot + max_rot_dt * k
+        min_rot =  observation.ego_info.rot - max_rot_dt * k
+         # [动力学约束] -1.4 <= 前轮转速转速 < 1.4  
+        rot_ans = np.clip (rot_target , min_rot , max_rot )
+
+        # 考虑进行变道
+        self.consider_change_lane(observation)
+        return [self.deside_acc(state), rot_ans]
 
     def deside_acc(self, state: pd.DataFrame) -> float:
         v, fv, dis_gap, direction = self.getInformFront(state)
@@ -260,3 +340,34 @@ class LAUCH(PlannerBase):
             dis_gap = -1
             fv = -1
         return v, fv, dis_gap, direction
+
+
+
+
+
+
+    def _check_is_lane_next(self , l1 , l2):
+        if (l1[0] == l2[0] and l1[1] == l2[1] and abs(l1[2] - l2[2]) == 1):
+            return True
+        return False
+            
+
+    def consider_change_lane(self,observation: Observation):
+        consider_rot = 0.1
+        if (self.act_state == act_state.default):
+            # 当前已经保持了车道
+            if abs (observation.ego_info.rot ) <  consider_rot:
+                if self.route_list_index < len(self.route_list) - 1:
+                    target_lane_quad = self.route_list[self.route_list_index + 1]
+                    if self._check_is_lane_next(target_lane_quad , self.lane_quad_act):
+                        self.act_state = act_state.change_lane
+                        # 目标车道在左手方
+                        if (target_lane_quad[2] > self.lane_quad_act[2]):
+                            self.change_lane_flag = 1
+                        else:
+                            self.change_lane_flag = -1
+        # if (self.act_state == act_state.change_lane):
+            
+                
+                
+                
