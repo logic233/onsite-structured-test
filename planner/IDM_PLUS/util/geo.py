@@ -15,8 +15,10 @@ def get_2p_yaw(x1 , y1 ,x2 ,y2):
     
     # 计算夹角（弧度）
     theta = math.acos(costheta)   
+    if y1 > y2 :
+        theta =  math.pi * 2 - theta
     return range_yaw(theta)
 
 
 if __name__ == '__main__':
-    print(get_2p_yaw(-1 , 1 , -2 , 2))
+    print(get_2p_yaw(138.472 , 113.175 , 134.88 , 105.41))

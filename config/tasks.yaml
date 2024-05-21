@@ -11,6 +11,6 @@
 
 REPLAY:
   tasks:
-    - 12_107_straight_straight_113
-  visualize: False
-  skipExist: True
+    - 0_1019_merge_1024
+  visualize: True
+  skipExist: False

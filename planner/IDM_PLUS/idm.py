@@ -116,17 +116,24 @@ class IDM(PlannerBase):
         # [估计值] 在目力所见 10 内
         theta_d = math.pi / 16
         d_ind = []
-
         for i in range(len(state)):
             d_ind.append(True)
         for i in range(1, len(state)):
+            if not x_ind[i]:
+                continue
             state_item = state[i]
             # 确保当前速度比所有前车慢
             # 在当前极限刹车距离之外的车均不考虑
-            if   math.sqrt((state_item[0] - ego[0])** 2 +   (state_item[1] - ego[1])** 2 ) >  ( ego[2] - state_item[2] ) ** 2 /2 / self.a_bound + ego[2] * 0.5 + 10:
+            distance_2p = math.sqrt((state_item[0] - ego[0])** 2 +   (state_item[1] - ego[1])** 2 ) 
+            distance_consider = ( ego[2] - state_item[2] ) ** 2 /2 / self.a_bound + ego[2] * 0.5 + 10
+            if  distance_2p > distance_consider :
                 d_ind[i] = False 
+            # [TODO] 车辆会有宽度
             yaw_2p = get_2p_yaw(ego[0] * direction , ego[1] , state_item[0] * direction, state_item[1])
-            if yaw_2p > state[0, 3] + theta_d or yaw_2p < state[0, 3] - theta_d:
+            # [-2pi ]
+            theta_x = (yaw_2p - state[0, 3]) % (math.pi * 2 )
+            print(theta_x)
+            if theta_x >  theta_d and theta_x <  math.pi * 2 - theta_d:
                 d_ind[i] = False
         ind = x_ind & d_ind
         if ind.sum() > 0:
@@ -136,7 +143,7 @@ class IDM(PlannerBase):
             front = state_ind[(state_ind[:,2]).argmin(),:]
             printf("###### 最慢的前车")
             printf(front)
-            self.exv = max (0.96 * front[2], 0.0001) 
+            self.exv = max (0.96 * front[2], 0.00001) 
         else:
             self.exv = 50
         printf("###### self.exv fix:", self.exv)
