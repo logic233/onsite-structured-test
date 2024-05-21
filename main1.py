@@ -6,7 +6,7 @@ import TessNG
 import OnSiteReplay
 
 from utils.ScenarioManager import select_scenario_manager
-from utils.logger import logger
+from utils.logger1 import logger
 from planner import PLANNER
 
 def main():

@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='utf-8'?>
 <OpenDRIVE>
-	<header revMajor="1" revMinor="4" name="SinD" version="1" date="2023-05-13T14:41:57" north="1.0613519510659082e+3" south="9.3530277097442047e+2" east="1.1292130610046058e+3" west="9.2383713546632418e+2" vendor="MathWorks">
+	<header revMajor="1" revMinor="4" name="intersection" version="1" date="2023-05-13T14:41:57" north="1.0613519510659082e+3" south="9.3530277097442047e+2" east="1.1292130610046058e+3" west="9.2383713546632418e+2" vendor="MathWorks">
 		<geoReference>+proj=tmerc +lat_0=0 +lon_0=0 +k=1 +x_0=0 +y_0=0 +datum=WGS84 +units=m +geoidgrids=egm96_15.gtx +vunits=m +no_defs </geoReference>
 		<userData>
 			<vectorScene program="RoadRunner" version="R2022b (1.5.0.fcdcb76871)" />

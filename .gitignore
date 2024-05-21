@@ -20,7 +20,10 @@
 .vscode/launch.json
 
 main.py
-
-scenario2/
+scenario/*
+scenario*/*
 
 outputs*/*
+pic/
+
+*.xodr

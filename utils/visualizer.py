@@ -331,11 +331,11 @@ class Visualizer():
                     lw=0.0,
                     alpha=0.5,
                     zorder=0,
-                    label='label',
+                    label=label,
                 )
             )
-            ax.scatter(discrete_lane.center_vertices[0][0], discrete_lane.center_vertices[0][1], color='red')
-            ax.annotate(discrete_lane.lane_id, (discrete_lane.center_vertices[0][0], discrete_lane.center_vertices[0][1]), fontsize=10)
+            # ax.scatter(discrete_lane.center_vertices[0][0], discrete_lane.center_vertices[0][1], color='red')
+            # ax.annotate(discrete_lane.lane_id, (discrete_lane.center_vertices[0][0], discrete_lane.center_vertices[0][1]), fontsize=10)
             ax.plot(
                 [x for x, _ in discrete_lane.left_vertices],
                 [y for _, y in discrete_lane.left_vertices],
