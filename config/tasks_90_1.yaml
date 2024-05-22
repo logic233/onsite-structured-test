@@ -1,0 +1,14 @@
+REPLAY:
+  tasks:
+    # -  0_1019_merge_1024
+    -  0_509_merge_516
+    -  0_511_merge_515
+    -  0_586_merge_587
+    -  0_623_merge_624
+    -  0_631_merge_641
+    -  0_86_merge_92
+    -  0_88_merge_92
+    -  14_6_left_left_8
+    -  15_97_straight_straight_99
+  visualize: True
+  skipExist: False
