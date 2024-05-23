@@ -14,7 +14,7 @@ def printf(*args, **kwargs):
     if False:
         print(*args, **kwargs)
 class IDM(PlannerBase):
-    def __init__(self, a_bound=3.0, exv=50, t=0.6, a=2.22, b=2.4, gama=4, s0=1.0, s1=2.0):
+    def __init__(self, a_bound=5.0, exv=40, t=1.6, a=2.22, b=2.4, gama=4, s0=2.0, s1=2.0):
         """跟idm模型有关的模型参数
         :param a_bound: 本车加速度绝对值的上下界
         :param exv: 期望速度
@@ -64,21 +64,18 @@ class IDM(PlannerBase):
         return [self.deside_acc(state), 0]
 
     def deside_acc(self, state: pd.DataFrame) :
-        v = self.getInformFront(state)
-        # if dis_gap < 0:
-        #     a_idm = self.a * (1 - (v / self.exv) ** self.gama)
-        # else:
-        #     # 求解本车与前车的期望距离
-        #     # printf(self.s0,self.s1,self.exv,v,self.t)
-        #     self.s_ = self.s0 + self.s1 * (v / self.exv) ** 0.5 + self.t * v + v * (
-        #         v - fv) / 2 / (self.a * self.b) ** 0.5
-        #     # 求解本车加速度
-        #     a_idm = self.a * (1 - (v / self.exv) ** self.gama - ((self.s_ / (dis_gap+1e-6)) ** 2))
-        if self.exv > v:
-                a_idm = self.a_bound
+        v, fv, dis_gap = self.getInformFront(state)
+        if dis_gap < 0 :
+            a_idm = self.a * (1 - (v / self.exv) ** self.gama)
         else:
-            a_idm = -self.a_bound
-        aa_max = state[0,6] + 30 * self.dt
+            # 求解本车与前车的期望距离
+            # print(self.s0,self.s1,self.exv,v,self.t)
+            self.s_ = self.s0 + self.s1 * (v / self.exv) ** 0.5 + self.t * v + v * (
+                v - fv) / 2 / (self.a * self.b) ** 0.5
+            # 求解本车加速度
+            a_idm = self.a * (1 - (v / self.exv) ** self.gama - ((self.s_ / (dis_gap+1e-6)) ** 2))
+        # 较慢加速
+        aa_max = state[0,6] + 10 * self.dt
         aa_min = state[0,6] - 30 * self.dt
         # 对加速度进行约束
         a_idm = np.clip(a_idm, max(-self.a_bound,aa_min), min(self.a_bound , aa_max))
@@ -103,6 +100,8 @@ class IDM(PlannerBase):
         exv = 100000
         exv_max = 50
         exv_inx = -1
+        l_st_vst = [[0,0,1,0]]
+        l_length_ = [1]
         for i in range(1, len(state)):
             state_item = state[i]
             # 重新构建坐标系 s 方向ego车向
@@ -113,14 +112,18 @@ class IDM(PlannerBase):
             # 将目标车速度向ego车向分解为
             _vs = math.cos(yaw_delta) * state_item[2]
             _vt = math.sin(yaw_delta) * state_item[2] * (-1)
+            l_st_vst.append([_s , _t ,_vs ,_vt])
             distance_2p = math.sqrt(_t** 2 +   _s** 2 ) 
 
             item_length  = state_item[4]
             item_width = state_item[5]
             #目标车中心到外侧距离
             width_ = math.cos( math.atan(item_length / item_width) - abs(yaw_delta)) * math.sqrt(item_length**2 + item_width ** 2) /2
+            # 取代长度 需要检查
+            length_ = math.sin( math.atan(item_length / item_width) - abs(yaw_delta)) * math.sqrt(item_length**2 + item_width ** 2) /2
+            l_length_.append(width_)
             # 安全通过 两中心之间水平距离
-            safety_cross_width = width_ + ego[5] /2 * 2  
+            safety_cross_width = width_ + ego[5] /2 * 2
             
             # 需要控制ego 大于正方向车距 
             safety_s = ego[4] /2 + item_length/2 + ( v - _vs ) ** 2 /2 / self.a_bound  + ( v - _vs ) * self.dt * 3 + 8 
@@ -130,10 +133,10 @@ class IDM(PlannerBase):
             # 在安全车距外的车 忽略
             printf("===========\n",state_item[-1] , safety_s)
             printf("st",round(_s ,2 ) , round(_t ,2 ), "||  vst",round(_vs ,2 ) , round(_vt ,2 ))
-            if abs(_s) > safety_s:
-                d_ind[i] = False 
-                printf("在安全车距外")
-                continue                 
+            # if abs(_s) > safety_s:
+            #     d_ind[i] = False 
+            #     printf("在安全车距外")
+            #     continue                 
             # 在t方向上正在远离ego
             if _t *  _vt > 0  and abs(_t) > safety_cross_width:
                 d_ind[i] = False 
@@ -155,17 +158,23 @@ class IDM(PlannerBase):
                         printf("安全超车/汇车")
                         continue    
             
-            vsx = _vs - math.sqrt(2 * self.a_bound * ( safety_s - abs(_s)))
-            if vsx < exv:
-                exv = vsx
-                exv_inx = i
+            # vsx = _vs - math.sqrt(2 * self.a_bound * ( safety_s - abs(_s)))
+            # if vsx < exv:
+            #     exv = vsx
+            #     exv_inx = i
+        v, fv, dis_gap = ego[2], -1, -1
         if sum(d_ind) > 0:
             printf("+++ 前方的车",)
             printf(state[d_ind,:][:,-1])
-            printf("###### 最慢的前车")
-            printf(state[exv_inx][-1])
-            self.exv = max (exv, 0.00001) 
-        else:
-            self.exv = exv_max
-        printf("###### self.exv fix:", self.exv)
-        return v
+            idx = d_ind.index(True)
+            for i in range(1,len(state)):
+                if d_ind[i]:
+                    if l_st_vst[i][0] < l_st_vst[idx][0]:
+                        idx = i
+            fv = l_st_vst[idx][2]
+            dis_gap = l_st_vst[idx][0] - (ego[4] /2 + state[idx][4]/2)  
+            printf(state[idx][-1],fv,dis_gap)
+        if dis_gap > 100:
+            dis_gap = -1
+            fv = -1
+        return v, fv, dis_gap
