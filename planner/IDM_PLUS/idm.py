@@ -14,7 +14,7 @@ def printf(*args, **kwargs):
     if False:
         print(*args, **kwargs)
 class IDM(PlannerBase):
-    def __init__(self, a_bound=4.0, exv=50, t=0.6, a=2.22, b=2.4, gama=4, s0=1.0, s1=2.0):
+    def __init__(self, a_bound=3.0, exv=50, t=0.6, a=2.22, b=2.4, gama=4, s0=1.0, s1=2.0):
         """跟idm模型有关的模型参数
         :param a_bound: 本车加速度绝对值的上下界
         :param exv: 期望速度
@@ -123,7 +123,7 @@ class IDM(PlannerBase):
             safety_cross_width = width_ + ego[5] /2 * 2  
             
             # 需要控制ego 大于正方向车距 
-            safety_s = ego[4] /2 + item_length/2 + ( v - _vs ) ** 2 /2 / self.a_bound + v / 2 + 7
+            safety_s = ego[4] /2 + item_length/2 + ( v - _vs ) ** 2 /2 / self.a_bound  + ( v - _vs ) * self.dt * 3 + 8 
             if _s < 0 :
                 d_ind[i] = False 
                 continue           
