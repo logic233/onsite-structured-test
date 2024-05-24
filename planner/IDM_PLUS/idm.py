@@ -14,7 +14,7 @@ def printf(*args, **kwargs):
     if False:
         print(*args, **kwargs)
 class IDM(PlannerBase):
-    def __init__(self, a_bound=5.0, exv=40, t=1.6, a=2.22, b=2.4, gama=4, s0=2.0, s1=2.0):
+    def __init__(self, a_bound=5.0, exv=40, t=1.2, a=2.22, b=2.4, gama=4, s0=2.0, s1=2.0):
         """跟idm模型有关的模型参数
         :param a_bound: 本车加速度绝对值的上下界
         :param exv: 期望速度
@@ -120,8 +120,8 @@ class IDM(PlannerBase):
             #目标车中心到外侧距离
             width_ = math.cos( math.atan(item_length / item_width) - abs(yaw_delta)) * math.sqrt(item_length**2 + item_width ** 2) /2
             # 取代长度 需要检查
-            length_ = math.sin( math.atan(item_length / item_width) - abs(yaw_delta)) * math.sqrt(item_length**2 + item_width ** 2) /2
-            l_length_.append(width_)
+            length_ = math.cos(abs(yaw_delta) - math.atan(item_width / item_length) ) * math.sqrt(item_length**2 + item_width ** 2) /2
+            l_length_.append(length_)
             # 安全通过 两中心之间水平距离
             safety_cross_width = width_ + ego[5] /2 * 2
             
@@ -172,7 +172,8 @@ class IDM(PlannerBase):
                     if l_st_vst[i][0] < l_st_vst[idx][0]:
                         idx = i
             fv = l_st_vst[idx][2]
-            dis_gap = l_st_vst[idx][0] - (ego[4] /2 + state[idx][4]/2)  
+            printf("fix:", state[idx][4]/2 ,"->", l_length_[idx])
+            dis_gap = l_st_vst[idx][0] - (ego[4] /2 + l_length_[idx])  
             printf(state[idx][-1],fv,dis_gap)
         if dis_gap > 100:
             dis_gap = -1
