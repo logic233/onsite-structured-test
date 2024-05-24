@@ -3,18 +3,22 @@
 #import lib
 import numpy as np
 import pandas as pd
+import  math,json
 from planner.plannerBase import PlannerBase
 from utils.observation import Observation
 from utils.opendrive2discretenet import parse_opendrive
 from typing import List, Tuple
-from .util.geo import *
 from utils.logger import logger
-import  math
+
+from .util.geo import *
+from .util.road_info import *
+from .util.myopendrive2discretenet import parse_opendrive2xml
+from .util.update import *
 def printf(*args, **kwargs):
     if False:
         print(*args, **kwargs)
 class IDM(PlannerBase):
-    def __init__(self, a_bound=5.0, exv=40, t=1.2, a=2.22, b=2.4, gama=4, s0=2.0, s1=2.0):
+    def __init__(self, a_bound=5.0, exv=45, t=0.3, a=2.22, b=2.4, gama=4, s0=4.0, s1=0.5):
         """跟idm模型有关的模型参数
         :param a_bound: 本车加速度绝对值的上下界
         :param exv: 期望速度
@@ -35,16 +39,29 @@ class IDM(PlannerBase):
         self.s1 = s1
         self.s_ = 0
         
+        # 更新时间
         self.dt = 0
-
+        # 存储路网xml
+        self.openDriveXml = None  
+        self.rot = 0
+        
+        self.tar_x = 0
+        self.tar_y = 0
     def init(self, scenario_dict):
         printf("----------------------------IDM INIT----------------------------")
         printf(scenario_dict)
+        self.openDriveXml = parse_opendrive2xml(scenario_dict['source_file']['xodr'])
+        
+        targetPos = scenario_dict['task_info']['targetPos']
+        self.tar_x = (targetPos[0][0]+targetPos[1][0])/2
+        self.tar_y = (targetPos[0][1]+targetPos[1][1])/2 
+        # 将对象转换为格式化的JSON字符串
+        # json_str = json.dumps(self.openDriveXml , indent=4)
         printf("----------------------------------------------------------------")
         # parse_opendrive(scenario_dict['source_file']['xodr'])
 
     def act(self, observation: Observation):
-        printf("----------------------------IDM ACT----------------------------")
+        printf("----------------------------IDM ACT--",observation.test_info["t"],"--------------------------")
         # printf(observation)
         # printf("----------------------------------------------------------------")      
         # 加载主车信息
@@ -61,7 +78,63 @@ class IDM(PlannerBase):
                 frame = pd.concat([frame, sub_frame])
         state = frame.to_numpy()
         self.dt = observation.test_info["dt"]
-        return [self.deside_acc(state), 0]
+        self.rot = observation.ego_info.rot
+        
+        # x y need to update
+        up = updater(state[0][4] , self.dt)
+        for i in range(len(state)):
+            state[i][0] = up.u_x(state[i][0] , state[i][2] ,state[i][3])
+            state[i][1] = up.u_y(state[i][1] , state[i][2] ,state[i][3])
+        return [self.deside_acc(state), self.deside_rot(state)]
+    
+    def deside_rot(self, state: pd.DataFrame) :
+        quad = find_in_road_lanesection_lane(self.openDriveXml, state[0][0] , state[0][1])
+        _s , _t = get_st(self.openDriveXml, state[0][0] , state[0][1] , quad)
+        if _s == None:
+            return 0
+        rot_ans = 0
+        
+        # # [test rot]
+        yaw_planView = get_heading(self.openDriveXml, state[0][0] , state[0][1])
+        
+        if (yaw_planView == None):
+            yaw_planView = state[0][3]
+        else:
+            yaw_planView =  yaw_planView %  (2 * math.pi)
+            state[0][3]  = state[0][3] %  (2 * math.pi)
+                 
+            # print("===head===")
+            # print(yaw_planView)
+            
+
+            # quad[2] = 1 if quad[2] > 0 else -1
+            target_t = find_lane_mid_t(self.openDriveXml, _s , quad)
+            if target_t==None:
+                return 0
+            offset_t = get_lane_delta_t(self.openDriveXml, _s , quad)
+            target_t += offset_t
+            # 考虑t_back 时间能回正
+            t_back = 0.6 + state[0][2] * 0.3
+            _vt_consier = (target_t - _t) / t_back
+            _yaw_consider = math.asin(  np.clip (_vt_consier / state[0][2] , -1, 1))
+            # tan_target = ( yaw_target - state[0][3] ) / (state[0][2] + 1e-7)* (state[0][4] / 1.7) /  self.dt
+            rot_target = (_yaw_consider+yaw_planView) - state[0][3] 
+            if rot_target < - math.pi:
+                rot_target+=math.pi * 2
+            if rot_target > math.pi:
+                rot_target-=math.pi * 2
+            # printf("_yaw_consider yaw_planView state[0][3]" , _yaw_consider , yaw_planView , state[0][3] )
+            
+            # [动力学约束]  -0.7 <= 前轮转角 <= 0.7
+            k = 0.6
+            rot_target = np.clip (rot_target , -0.7 * k , 0.7 * k)
+            max_rot_dt =  self.dt * 1.4
+            max_rot =  self.rot + max_rot_dt * k
+            min_rot =  self.rot - max_rot_dt * k
+            # [动力学约束] -1.4 <= 前轮转速转速 < 1.4  
+            rot_ans = np.clip (rot_target , min_rot , max_rot )
+        printf("rot_ans", rot_ans)
+        return rot_ans
 
     def deside_acc(self, state: pd.DataFrame) :
         v, fv, dis_gap = self.getInformFront(state)
@@ -70,8 +143,13 @@ class IDM(PlannerBase):
         else:
             # 求解本车与前车的期望距离
             # print(self.s0,self.s1,self.exv,v,self.t)
-            self.s_ = self.s0 + self.s1 * (v / self.exv) ** 0.5 + self.t * v + v * (
-                v - fv) / 2 / (self.a * self.b) ** 0.5
+            self.s_ = self.s0 + self.s1 * (v / self.exv) ** 0.5 + \
+                max (self.t * v + v * (v - fv) / 2 / (self.a * self.b) ** 0.5 , 0)
+            printf(self.s_  , "=" , self.s0 ,  self.s1 * (v / self.exv) ** 0.5 , self.t * v , v * (
+                v - fv) / 2 / (self.a * self.b) ** 0.5  )
+            if abs (self.tar_y - state[0][1]) < 5 and abs(self.tar_x - state[0][0]) < self.s_ * 4:
+                printf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+                dis_gap = 100
             # 求解本车加速度
             a_idm = self.a * (1 - (v / self.exv) ** self.gama - ((self.s_ / (dis_gap+1e-6)) ** 2))
         # 较慢加速
@@ -111,7 +189,7 @@ class IDM(PlannerBase):
             yaw_delta = yaw_i - ego[3]
             # 将目标车速度向ego车向分解为
             _vs = math.cos(yaw_delta) * state_item[2]
-            _vt = math.sin(yaw_delta) * state_item[2] * (-1)
+            _vt = math.sin(yaw_delta) * state_item[2] 
             l_st_vst.append([_s , _t ,_vs ,_vt])
             distance_2p = math.sqrt(_t** 2 +   _s** 2 ) 
 
@@ -123,7 +201,7 @@ class IDM(PlannerBase):
             length_ = math.cos(abs(yaw_delta) - math.atan(item_width / item_length) ) * math.sqrt(item_length**2 + item_width ** 2) /2
             l_length_.append(length_)
             # 安全通过 两中心之间水平距离
-            safety_cross_width = width_ + ego[5] /2 * 2
+            safety_cross_width = width_ + ego[5] /2 * 1.7
             
             # 需要控制ego 大于正方向车距 
             safety_s = ego[4] /2 + item_length/2 + ( v - _vs ) ** 2 /2 / self.a_bound  + ( v - _vs ) * self.dt * 3 + 8 
@@ -138,7 +216,7 @@ class IDM(PlannerBase):
             #     printf("在安全车距外")
             #     continue                 
             # 在t方向上正在远离ego
-            if _t *  _vt > 0  and abs(_t) > safety_cross_width:
+            if _t *  _vt >= 0  and abs(_t) > safety_cross_width:
                 d_ind[i] = False 
                 printf("在t方向上正在远离ego")
                 continue 
@@ -172,9 +250,8 @@ class IDM(PlannerBase):
                     if l_st_vst[i][0] < l_st_vst[idx][0]:
                         idx = i
             fv = l_st_vst[idx][2]
-            printf("fix:", state[idx][4]/2 ,"->", l_length_[idx])
             dis_gap = l_st_vst[idx][0] - (ego[4] /2 + l_length_[idx])  
-            printf(state[idx][-1],fv,dis_gap)
+            printf("#",state[idx][-1],"#",fv,dis_gap)
         if dis_gap > 100:
             dis_gap = -1
             fv = -1
