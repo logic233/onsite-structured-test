@@ -85,6 +85,11 @@ class IDM(PlannerBase):
         for i in range(len(state)):
             state[i][0] = up.u_x(state[i][0] , state[i][2] ,state[i][3])
             state[i][1] = up.u_y(state[i][1] , state[i][2] ,state[i][3])
+            
+            
+        quad = find_in_road_lanesection_lane(self.openDriveXml, state[0][0] , state[0][1])
+        _s , _t = get_st(self.openDriveXml, state[0][0] , state[0][1] , quad)
+        self.exv = get_exv(self.openDriveXml,_s , quad)
         return [self.deside_acc(state), self.deside_rot(state)]
     
     def deside_rot(self, state: pd.DataFrame) :
@@ -127,12 +132,11 @@ class IDM(PlannerBase):
             
             # [动力学约束]  -0.7 <= 前轮转角 <= 0.7
             k = 0.6
-            rot_target = np.clip (rot_target , -0.7 * k , 0.7 * k)
             max_rot_dt =  self.dt * 1.4
-            max_rot =  self.rot + max_rot_dt * k
-            min_rot =  self.rot - max_rot_dt * k
+            max_rot_a =  self.rot + max_rot_dt * k
+            min_rot_a =  self.rot - max_rot_dt * k
             # [动力学约束] -1.4 <= 前轮转速转速 < 1.4  
-            rot_ans = np.clip (rot_target , min_rot , max_rot )
+            rot_ans = np.clip (rot_target , max( -0.1 , min_rot_a ), min (0.1 ,max_rot_a))
         printf("rot_ans", rot_ans)
         return rot_ans
 
@@ -147,9 +151,9 @@ class IDM(PlannerBase):
                 max (self.t * v + v * (v - fv) / 2 / (self.a * self.b) ** 0.5 , 0)
             printf(self.s_  , "=" , self.s0 ,  self.s1 * (v / self.exv) ** 0.5 , self.t * v , v * (
                 v - fv) / 2 / (self.a * self.b) ** 0.5  )
-            if abs (self.tar_y - state[0][1]) < 5 and abs(self.tar_x - state[0][0]) < self.s_ * 4:
-                printf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-                dis_gap = 100
+            # if abs (self.tar_y - state[0][1]) < 5 and abs(self.tar_x - state[0][0]) < self.s_ * 4:
+            #     printf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+            #     dis_gap = 100
             # 求解本车加速度
             a_idm = self.a * (1 - (v / self.exv) ** self.gama - ((self.s_ / (dis_gap+1e-6)) ** 2))
         # 较慢加速

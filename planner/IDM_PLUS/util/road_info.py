@@ -104,6 +104,8 @@ def find_lane_mid_t(openDriveXml,s,lane_quad):
     return None
 
 def get_lane_delta_t(openDriveXml,s,lane_quad):
+    if lane_quad == None:
+        return 0
     for road in openDriveXml.roads:
         if road.id == lane_quad[0]:
             cur = road._planView.get_curvature(s)
@@ -111,6 +113,19 @@ def get_lane_delta_t(openDriveXml,s,lane_quad):
                 return 0
             k = 1 if cur>0 else -1
             return k * 0.3
-            if ret == None:
-                return 0
-            return 0
+    return 0
+def get_exv(openDriveXml,s,lane_quad):
+    max_exv = 45
+    if lane_quad == None:
+        return max_exv
+    for road in openDriveXml.roads:
+        if road.id == lane_quad[0]:
+            cur = road._planView.get_curvature(s)
+            if cur ==0:
+                return max_exv
+            r = abs(1/cur)
+            if r < 30:
+                return 5
+            if r < 50:
+                return 10
+    return max_exv 

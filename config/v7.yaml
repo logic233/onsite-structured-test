@@ -1,0 +1,9 @@
+REPLAY:
+  tasks:
+      # -   '8_6_1_392'
+      # -   '8_3_2_264'
+      # -   '1_747_merge_748'
+      -   '4_93_straight_straight_95'
+      -   '1_1_merge_5'
+  visualize: True
+  skipExist: False
