@@ -325,16 +325,16 @@ class PlanView:
         print("[Error]",geo)
       return None
     
-    def get_curvature(self,s):
+    def get_curvature(self,s): 
       geo = self.get_geo(s)
       ret = 0
       if geo == None:
-        return None
+        return 0
       if isinstance(geo,Line):
         return 0
       elif isinstance(geo,Arc):
         return geo.curvature 
       else:
         print("[Error]",geo)
-      return None
+      return 0
     

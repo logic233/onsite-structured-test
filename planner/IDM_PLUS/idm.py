@@ -14,6 +14,8 @@ from .util.geo import *
 from .util.road_info import *
 from .util.myopendrive2discretenet import parse_opendrive2xml
 from .util.update import *
+from .util.lane_graph import *
+from .util.pid import *
 def printf(*args, **kwargs):
     if False:
         print(*args, **kwargs)
@@ -47,23 +49,33 @@ class IDM(PlannerBase):
         
         self.tar_x = 0
         self.tar_y = 0
+        self.laneGraph = None
+        self.laneGraph_idx = 0
+        self.deside_rot_delta_t = 0
     def init(self, scenario_dict):
         printf("----------------------------IDM INIT----------------------------")
         printf(scenario_dict)
-        self.openDriveXml = parse_opendrive2xml(scenario_dict['source_file']['xodr'])
-        
+        xodr_path = scenario_dict['source_file']['xodr']
+        self.openDriveXml = parse_opendrive2xml(xodr_path)
+        road_info = parse_opendrive(xodr_path)
+
+        startPos = scenario_dict['task_info']['startPos']
         targetPos = scenario_dict['task_info']['targetPos']
         self.tar_x = (targetPos[0][0]+targetPos[1][0])/2
         self.tar_y = (targetPos[0][1]+targetPos[1][1])/2 
+        start_quad = find_in_road_lanesection_lane( self.openDriveXml, startPos[0],startPos[1])
+        target_quad= find_in_road_lanesection_lane( self.openDriveXml , (targetPos[0][0]+targetPos[1][0])/2,(targetPos[0][1]+targetPos[1][1])/2)
+
+        
+        self.laneGraph = LaneGraph(road_info)
+        self.laneGraph.lane_graph_route(start_quad,target_quad)
         # 将对象转换为格式化的JSON字符串
         # json_str = json.dumps(self.openDriveXml , indent=4)
         printf("----------------------------------------------------------------")
         # parse_opendrive(scenario_dict['source_file']['xodr'])
 
     def act(self, observation: Observation):
-        printf("----------------------------IDM ACT--",observation.test_info["t"],"--------------------------")
-        # printf(observation)
-        # printf("----------------------------------------------------------------")      
+        printf("----------------------------IDM ACT--",observation.test_info["t"],"--------------------------")   
         # 加载主车信息
         frame = pd.DataFrame(
             vars(observation.ego_info),
@@ -89,54 +101,120 @@ class IDM(PlannerBase):
             
         quad = find_in_road_lanesection_lane(self.openDriveXml, state[0][0] , state[0][1])
         _s , _t = get_st(self.openDriveXml, state[0][0] , state[0][1] , quad)
+        length =  get_road_length(self.openDriveXml , quad)
         self.exv = get_exv(self.openDriveXml,_s , quad)
+        if length != None and _s != None:
+            _res_length = length-_s
+            for i in range(10):
+                if _res_length < state[0][2] * 4:
+                    if self.laneGraph_idx + i < len(self.laneGraph.route_list): 
+                        quad = self.laneGraph.route_list[self.laneGraph_idx + i]
+                        _l = get_road_length(self.openDriveXml , quad)
+                        self.exv = min( get_exv(self.openDriveXml,0, quad) ,get_exv(self.openDriveXml,_l/2, quad)  , self.exv)
+                        _res_length += _l
+        printf(self.exv)
         return [self.deside_acc(state), self.deside_rot(state)]
     
     def deside_rot(self, state: pd.DataFrame) :
-        quad = find_in_road_lanesection_lane(self.openDriveXml, state[0][0] , state[0][1])
-        _s , _t = get_st(self.openDriveXml, state[0][0] , state[0][1] , quad)
+        # 考虑下未来情况
+        # consider_time = 0.1
+        # up = updater(state[0][4] , consider_time)
+        # for i in range(len(state)):
+        #     state[i][0] = up.u_x(state[i][0] , state[i][2] ,state[i][3])
+        #     state[i][1] = up.u_y(state[i][1] , state[i][2] ,state[i][3])
+            
+        
+        
+        quad_located = None
+        _distance_min = 1e6
+        quad_this = find_in_road_lanesection_lane(self.openDriveXml, state[0][0] , state[0][1])
+
+        for quad in self.laneGraph.route_list:
+            if quad_this == quad:
+                # 提前d_length 观察下一个
+                d_length = 3
+                _s , _t = get_st(self.openDriveXml, state[0][0] , state[0][1] , quad)
+                road_length = get_road_length(self.openDriveXml, quad)
+                if _s + d_length > road_length:
+                    continue
+            _s , _t = get_st(self.openDriveXml, state[0][0] , state[0][1] , quad)
+            if _t == None:
+                continue
+            # if abs(_t) > 20:
+            #     continue
+            _distance = get_distance_to_quad(self.openDriveXml, state[0][0] , state[0][1] , quad) 
+            if _distance == None:
+                continue
+            if _distance < _distance_min:
+                quad_located = quad
+                _distance_min = _distance
+            if quad_located in self.laneGraph.route_list:
+                self.laneGraph_idx = self.laneGraph.route_list.index(quad_located)
+        if quad_located == None:
+            quad_located = quad_this
+        printf("quad_located" , quad_located)
+        _s , _t = get_st(self.openDriveXml, state[0][0] , state[0][1] , quad_located)
         if _s == None:
+            printf("before 1")
             return 0
         rot_ans = 0
         
         # # [test rot]
-        yaw_planView = get_heading(self.openDriveXml, state[0][0] , state[0][1])
+        yaw_planView = get_heading(self.openDriveXml, state[0][0] , state[0][1],quad_located)
         
         if (yaw_planView == None):
+            printf("before 2")
             yaw_planView = state[0][3]
         else:
-            yaw_planView =  yaw_planView %  (2 * math.pi)
-            state[0][3]  = state[0][3] %  (2 * math.pi)
-                 
-            # print("===head===")
-            # print(yaw_planView)
+            yaw_planView =  range_yaw(yaw_planView , -math.pi)
+            state[0][3]  = range_yaw( state[0][3] , -math.pi)
             
-
-            # quad[2] = 1 if quad[2] > 0 else -1
-            target_t = find_lane_mid_t(self.openDriveXml, _s , quad)
+            target_t = find_lane_mid_t(self.openDriveXml, _s , quad_located)
             if target_t==None:
                 return 0
-            offset_t = get_lane_delta_t(self.openDriveXml, _s , quad)
+            offset_t = get_lane_delta_t(self.openDriveXml, _s , quad_located)
             target_t += offset_t
+            printf("_t -> target_t ",_t , target_t)
+            
+            
+            # [PLAN A] #######################################
             # 考虑t_back 时间能回正
-            t_back = 0.6 + state[0][2] * 0.3
-            _vt_consier = (target_t - _t) / t_back
-            _yaw_consider = math.asin(  np.clip (_vt_consier / state[0][2] , -1, 1))
+            t_back = 0.3 + state[0][2] * 0.3
+            _vt_consier = (target_t - _t) / t_back 
+            
+            # [PLAN A END] #######################################
+            
+            # [PLAN B ] ########################################
+            # PID参数
+            Kp = 0.3
+            Ki = 0.01
+            Kd = 0.01
+
+            # 创建PID控制器实例
+            pid = PID(Kp, Ki, Kd, setpoint=0)
+            feedback = -(target_t - _t)
+            control = pid.update(feedback, self.dt)
+            _vt_consier = control 
+            # [PLAN B ] ########################################
+            _yaw_consider = math.asin(  np.clip (_vt_consier / (state[0][2] + 1e-7) , -1, 1))
+            printf("_yaw_consider",_yaw_consider)
             # tan_target = ( yaw_target - state[0][3] ) / (state[0][2] + 1e-7)* (state[0][4] / 1.7) /  self.dt
-            rot_target = (_yaw_consider+yaw_planView) - state[0][3] 
-            if rot_target < - math.pi:
-                rot_target+=math.pi * 2
-            if rot_target > math.pi:
-                rot_target-=math.pi * 2
+            _delta_yaw = range_yaw((_yaw_consider+yaw_planView) - state[0][3] , -math.pi)
+            printf("_delta_yaw",_delta_yaw)
+            rot_target = math.atan( _delta_yaw / self.dt / (state[0][2]+1e-7) * (state[0][4]/1.7) )
+            rot_target = range_yaw(rot_target , -math.pi)
             # printf("_yaw_consider yaw_planView state[0][3]" , _yaw_consider , yaw_planView , state[0][3] )
+            
             
             # [动力学约束]  -0.7 <= 前轮转角 <= 0.7
             k = 0.6
             max_rot_dt =  self.dt * 1.4
             max_rot_a =  self.rot + max_rot_dt * k
             min_rot_a =  self.rot - max_rot_dt * k
-            # [动力学约束] -1.4 <= 前轮转速转速 < 1.4  
-            rot_ans = np.clip (rot_target , max( -0.1 , min_rot_a ), min (0.1 ,max_rot_a))
+            # [动力学约束] -1.4 <= 前轮转速转速 < 1.4
+            # 质心侧偏角0.165  
+            rot_limit = math.atan(2*(0.165 - 0.06)/ self.dt / (state[0][2]+1e-6) ) 
+            rot_ans = np.clip (rot_target , max( -rot_limit , min_rot_a , -0.3), min (rot_limit ,max_rot_a , 0.3))
         printf("rot_ans", rot_ans)
         return rot_ans
 
@@ -149,8 +227,8 @@ class IDM(PlannerBase):
             # print(self.s0,self.s1,self.exv,v,self.t)
             self.s_ = self.s0 + self.s1 * (v / self.exv) ** 0.5 + \
                 max (self.t * v + v * (v - fv) / 2 / (self.a * self.b) ** 0.5 , 0)
-            printf(self.s_  , "=" , self.s0 ,  self.s1 * (v / self.exv) ** 0.5 , self.t * v , v * (
-                v - fv) / 2 / (self.a * self.b) ** 0.5  )
+            # printf(self.s_  , "=" , self.s0 ,  self.s1 * (v / self.exv) ** 0.5 , self.t * v , v * (
+            #     v - fv) / 2 / (self.a * self.b) ** 0.5  )
             # if abs (self.tar_y - state[0][1]) < 5 and abs(self.tar_x - state[0][0]) < self.s_ * 4:
             #     printf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
             #     dis_gap = 100
@@ -166,12 +244,7 @@ class IDM(PlannerBase):
         return a_idm
 
     def getInformFront(self, state: pd.DataFrame) :
-        # direction = np.sign(state[0,2])
         state[0, 3] = range_yaw(state[0, 3])
-        if state[0, 3] < np.pi / 2 or state[0, 3] > np.pi * 3 / 2:
-            direction = 1.0
-        else:
-            direction = -1.0
         ego = state[0,:]
         v = ego[2]
         d_ind = []
@@ -213,8 +286,8 @@ class IDM(PlannerBase):
                 d_ind[i] = False 
                 continue           
             # 在安全车距外的车 忽略
-            printf("===========\n",state_item[-1] , safety_s)
-            printf("st",round(_s ,2 ) , round(_t ,2 ), "||  vst",round(_vs ,2 ) , round(_vt ,2 ))
+            # printf("===========\n",state_item[-1] , safety_s)
+            # printf("st",round(_s ,2 ) , round(_t ,2 ), "||  vst",round(_vs ,2 ) , round(_vt ,2 ))
             # if abs(_s) > safety_s:
             #     d_ind[i] = False 
             #     printf("在安全车距外")

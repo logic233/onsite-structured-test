@@ -1,10 +1,10 @@
 import math
 
-def range_yaw(yaw):
-    if yaw > 2 * math.pi :
-        return range_yaw(yaw - 2 * math.pi)
-    if yaw < 0 :
-        return range_yaw(yaw + 2 * math.pi)
+def range_yaw(yaw , _min = 0):
+    if yaw > (_min + 2 * math.pi) :
+        return range_yaw(yaw - 2 * math.pi , _min)
+    if yaw < _min :
+        return range_yaw(yaw + 2 * math.pi , _min)
     return yaw
 def get_2p_yaw(x1 , y1 ,x2 ,y2):
     if x2 - x1 == 0:

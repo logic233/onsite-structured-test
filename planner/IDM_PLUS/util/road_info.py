@@ -1,4 +1,5 @@
 import math
+# 找到指定四元组
 def find_in_road_lanesection_lane(openDriveXml,x,y):
     t_min = float("Inf")
     target = -1
@@ -7,7 +8,7 @@ def find_in_road_lanesection_lane(openDriveXml,x,y):
         # 如果有效 那么查一下在当前road 的哪个lane中
         # 可能有 
         # 除非是处在juction中 否则在唯一的lane中
-        if (t != None ):
+        if (t != None and s > 0):
                 # 可能存在多个 roadOffse
             laneOffset_may = None
             t_offset = 0.0
@@ -45,33 +46,55 @@ def find_in_road_lanesection_lane(openDriveXml,x,y):
                 # print("lane_may",ret)
                 return ret
 def get_st(openDriveXml,x,y,quad=None):
-    l = quad
-    if l == None:
-        l = find_in_road_lanesection_lane(openDriveXml,x,y)
-    if l == None :
+    if quad == None:
+        quad = find_in_road_lanesection_lane(openDriveXml,x,y)
+    if quad == None :
         return None,None
     for road in openDriveXml.roads:
-        if road.id == l[0]:
+        if road.id == quad[0]:
             return road._planView.convert_to_reference_coordinates(x,y)
-               
-               
-def get_heading(openDriveXml,x,y,quad=None):
-    l = quad
-    if l == None:
-        l = find_in_road_lanesection_lane(openDriveXml,x,y)
-    if l == None :
+        
+def get_road_length(openDriveXml,quad):
+    if quad == None:
         return None
     for road in openDriveXml.roads:
-        if road.id == l[0]:
-            s,t = get_st(openDriveXml,x,y)
+        if road.id == quad[0]:
+            return road.length
+    return None      
+def get_distance_to_quad(openDriveXml ,x,y,quad):
+    _s , _t = get_st(openDriveXml, x , y , quad)
+    if quad == None:
+        return None
+    if _s == None:
+        return None
+    ret = 0
+    for road in openDriveXml.roads:
+        if road.id == quad[0]:
+            if _s <0:
+                ret += _s**2
+            if _s > road.length:
+                ret += (_s-road.length)**2
+            ret += _t **2
+    return math.sqrt(ret)                  
+               
+def get_heading(openDriveXml,x,y,quad=None):
+    if quad == None:
+        quad = find_in_road_lanesection_lane(openDriveXml,x,y)
+    if quad == None :
+        return None
+    for road in openDriveXml.roads:
+        if road.id == quad[0]:
+            s,t = get_st(openDriveXml,x,y,quad)
             t = 0
-            if l[2] > 0:
+            if quad[2] > 0:
                 t -= math.pi 
             return road._planView.get_hed(s) + t
         
 
 def find_lane_mid_t(openDriveXml,s,lane_quad):
     if lane_quad==None:
+        return None
+    if s == None:
         return None
     for road in openDriveXml.roads:
         if road.id == lane_quad[0]:
@@ -111,8 +134,11 @@ def get_lane_delta_t(openDriveXml,s,lane_quad):
             cur = road._planView.get_curvature(s)
             if cur ==0:
                 return 0
+            r = abs(1/cur)
             k = 1 if cur>0 else -1
-            return k * 0.3
+            if r < 30:
+                return k * 0.6
+            return k * 0.4
     return 0
 def get_exv(openDriveXml,s,lane_quad):
     max_exv = 45
@@ -125,7 +151,7 @@ def get_exv(openDriveXml,s,lane_quad):
                 return max_exv
             r = abs(1/cur)
             if r < 30:
-                return 5
+                return 9
             if r < 50:
-                return 10
+                return 12
     return max_exv 

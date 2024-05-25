@@ -159,7 +159,7 @@ class Arc(Geometry):
     def calc_s2head (self,s):
         # 逆时针为负
         s_this = s - self._s
-        print("x",s_this, 1 / self.curvature)
+        # print("x",s_this, 1 / self.curvature)
         flag = 1
         if self.curvature < 0 :
             flag = -1
@@ -167,7 +167,7 @@ class Arc(Geometry):
         theta = s_this / r * flag
     
         # 计算点 A 处的切线与 x 轴正方向的夹角
-        print("self.heading + theta",self.heading , theta)
+        # print("self.heading + theta",self.heading , theta)
         tangent_angle_at_A = self.heading + theta
         
         return tangent_angle_at_A
