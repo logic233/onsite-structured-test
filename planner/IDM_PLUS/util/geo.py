@@ -1,5 +1,6 @@
 import math
-
+def get_distance(x,y,x1,y1):
+    return math.sqrt((x-x1)**2 + (y-y1)**2)
 def range_yaw(yaw , _min = 0):
     if yaw > (_min + 2 * math.pi) :
         return range_yaw(yaw - 2 * math.pi , _min)

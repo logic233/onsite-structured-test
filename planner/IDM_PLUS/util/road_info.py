@@ -86,8 +86,8 @@ def get_heading(openDriveXml,x,y,quad=None):
         if road.id == quad[0]:
             s,t = get_st(openDriveXml,x,y,quad)
             t = 0
-            if quad[2] > 0:
-                t -= math.pi 
+            # if quad[2] > 0:
+            #     t -= math.pi 
             return road._planView.get_hed(s) + t
         
 
