@@ -138,7 +138,7 @@ def get_lane_delta_t(openDriveXml,s,lane_quad):
             k = 1 if cur>0 else -1
             if r < 30:
                 return k * 0.6
-            return k * 0.4
+            return k * 0.2
     return 0
 def get_exv(openDriveXml,s,lane_quad):
     max_exv = 45
@@ -153,5 +153,5 @@ def get_exv(openDriveXml,s,lane_quad):
             if r < 30:
                 return 9
             if r < 50:
-                return 12
+                return 15
     return max_exv 

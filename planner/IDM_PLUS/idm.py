@@ -106,11 +106,11 @@ class IDM(PlannerBase):
         if length != None and _s != None:
             _res_length = length-_s
             for i in range(10):
-                if _res_length < state[0][2] * 4:
+                if _res_length < (state[0][2] ** 2 - 10 ** 2) /self.b :
                     if self.laneGraph_idx + i < len(self.laneGraph.route_list): 
                         quad = self.laneGraph.route_list[self.laneGraph_idx + i]
                         _l = get_road_length(self.openDriveXml , quad)
-                        self.exv = min( get_exv(self.openDriveXml,0, quad) ,get_exv(self.openDriveXml,_l/2, quad)  , self.exv)
+                        self.exv = min( get_exv(self.openDriveXml,0, quad) ,get_exv(self.openDriveXml,_l/4, quad)  , self.exv)
                         _res_length += _l
         printf(self.exv)
         return [self.deside_acc(state), self.deside_rot(state)]
@@ -188,7 +188,7 @@ class IDM(PlannerBase):
             # PID参数
             Kp = 0.3
             Ki = 0.01
-            Kd = 0.01
+            Kd = 0.02
 
             # 创建PID控制器实例
             pid = PID(Kp, Ki, Kd, setpoint=0)
@@ -197,9 +197,27 @@ class IDM(PlannerBase):
             _vt_consier = control 
             # [PLAN B ] ########################################
             _yaw_consider = math.asin(  np.clip (_vt_consier / (state[0][2] + 1e-7) , -1, 1))
-            printf("_yaw_consider",_yaw_consider)
+            yaw_future = (_yaw_consider+yaw_planView)
+            yaw_future = range_yaw(yaw_future , 0)
+            yaw_now = range_yaw(state[0][3] , 0)
+            # max_beta = 0.16 因该是 缩小点
+            max_beta = 0.15
+            _min1 = yaw_now - 2* max_beta
+            _max1 = yaw_now + 2* max_beta
+            # _min1 = range_yaw(_min1 , -math.pi)
+            # _max1 = range_yaw(_max1 , -math.pi)
+            # 应该是 8.33
+            _kv = 8
+            _min2 = yaw_now -  self.dt * _kv / (state[0][2] + 1e-7)
+            _max2 = yaw_now +  self.dt * _kv / (state[0][2] + 1e-7)
+            # _min2 = range_yaw(_min2 , -math.pi)
+            # _max2 = range_yaw(_max2 , -math.pi)
+            printf("yaw_future, _min1 , _min2 , _max1 , _max2", round(yaw_future,2), round(_min1,2) , round(_min2,2) , round(_max1,2) , round(_max2,2))
+            yaw_future =  np.clip (yaw_future , max(_min1 , _min2) , min(_max1 , _max2))
+            yaw_future = range_yaw(yaw_future , -math.pi)
+            printf("yaw_now -> yaw_future", yaw_now , yaw_future)
             # tan_target = ( yaw_target - state[0][3] ) / (state[0][2] + 1e-7)* (state[0][4] / 1.7) /  self.dt
-            _delta_yaw = range_yaw((_yaw_consider+yaw_planView) - state[0][3] , -math.pi)
+            _delta_yaw = range_yaw(yaw_future - yaw_now , -math.pi)
             printf("_delta_yaw",_delta_yaw)
             rot_target = math.atan( _delta_yaw / self.dt / (state[0][2]+1e-7) * (state[0][4]/1.7) )
             rot_target = range_yaw(rot_target , -math.pi)
@@ -213,8 +231,8 @@ class IDM(PlannerBase):
             min_rot_a =  self.rot - max_rot_dt * k
             # [动力学约束] -1.4 <= 前轮转速转速 < 1.4
             # 质心侧偏角0.165  
-            rot_limit = math.atan(2*(0.165 - 0.06)/ self.dt / (state[0][2]+1e-6) ) 
-            rot_ans = np.clip (rot_target , max( -rot_limit , min_rot_a , -0.3), min (rot_limit ,max_rot_a , 0.3))
+            # rot_limit = math.atan(2*(0.165 - 0.06)/ self.dt / (state[0][2]+1e-6) ) 
+            rot_ans = np.clip (rot_target , max(   min_rot_a , -0.3), min ( max_rot_a , 0.3))
         printf("rot_ans", rot_ans)
         return rot_ans
 
