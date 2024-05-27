@@ -18,7 +18,7 @@ class PID:
         P = self.Kp * error
         I = self.Ki * self.integral
         D = self.Kd * derivative
-        print("PID" , round(P,2) , round(I,2) , round(D,2))
+        # print("PID" , round(P,2) , round(I,2) , round(D,2))
         output = P  + I + D 
         # 更新前一误差
         self.previous_error = error

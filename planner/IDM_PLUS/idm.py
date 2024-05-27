@@ -124,7 +124,7 @@ class IDM(PlannerBase):
                         else:
                             break
         # 如果接近终点，直接开冲
-        if quad_this  ==  self.laneGraph.route_list[-1]:
+        if len(self.laneGraph.route_list) >= 1 and quad_this  ==  self.laneGraph.route_list[-1]:
             yaw_now2tar = get_2p_yaw(state[0][0],state[0][1] ,self.tar_x , self.tar_y)
             if self.tar_s != None:
                 k = 1 if self.laneGraph.route_list[-1][2] < 0  else -1
