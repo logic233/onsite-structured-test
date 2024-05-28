@@ -1,15 +1,18 @@
-from .myopendrive2discretenet import parse_opendrive
+from .myopendrive2discretenet import parse_opendrive,parse_opendrive2xml
 import numpy as np
 import copy
 import scipy
 import random
+from .road_info import *
+
 class LaneGraph():
-    def __init__(self, road_info):
+    def __init__(self, road_info ,openDriveXml):
         self.lane_quad_list = []
         self.route_list = []
+        self.laneGraph_idx = 0
         self.lane_graph = None
+        self.openDriveXml = openDriveXml  
         self.lane_graph_init(road_info)
-        
 
     def lane_quad_maker(self,s):
         ret =[]
@@ -28,7 +31,7 @@ class LaneGraph():
         
         d_arr = np.zeros((len(self.lane_quad_list), len(self.lane_quad_list)))
         # 根据dis_lane.successor 构造边 权值给10
-        successor_coneect_weight = 10
+        # successor_coneect_weight = 10
         for dis_lane in road_info.discretelanes:
             for succ_id in dis_lane.successor:
                 from_quad = self.lane_quad_maker(dis_lane.lane_id)
@@ -40,7 +43,7 @@ class LaneGraph():
                     to_idx = self.lane_quad_list.index(to_quad)
                 except ValueError:
                     continue
-                d_arr[from_idx][to_idx] = successor_coneect_weight
+                d_arr[from_idx][to_idx] = get_road_length(self.openDriveXml,from_quad)
                 
         # 相近车道 也构建边 权值 为100
         neighbor_lane_weight = 100 
@@ -89,11 +92,35 @@ class LaneGraph():
         print("###############[route_list]###############")
         print(route_list)
         self.route_list = route_list
-        
+    
+    def get_distance(self,start_quad,target_quad):
+        if not start_quad in self.lane_quad_list or not target_quad in self.lane_quad_list:
+            return float("inf")
+        start_idx = self.lane_quad_list.index(start_quad)
+        target_idx = self.lane_quad_list.index(target_quad)
+        dist_matrix, predecessors = scipy.sparse.csgraph.dijkstra(self.lane_graph, return_predecessors=True, indices=start_idx)
+        return dist_matrix[target_idx]
+    def get_located_quad(self):
+        if self.laneGraph_idx >=0 and self.laneGraph_idx<len(self.route_list):
+            return self.route_list[self.laneGraph_idx]
+        else :
+            return None
+    def get_located_quad_next_i(self,i):
+        if self.laneGraph_idx + i >=0 and self.laneGraph_idx + i<len(self.route_list):
+            return self.route_list[self.laneGraph_idx+ i] 
+        else :
+            return None
+    def update_route_idx(self):
+        if self.laneGraph_idx+1 >=0 and self.laneGraph_idx + 1<len(self.route_list):
+            self.laneGraph_idx +=1 
+            return True
+        return False
+    
 if __name__ == '__main__':
     xodr_path = r'D:\project_s\onsite\onsite-structured-test\scenario\replay\0_79_merge_81\0_79_merge_81.xodr'
     road_info = parse_opendrive(xodr_path)
-    laneGraph = LaneGraph(road_info)
+    openDriveXml = parse_opendrive2xml(xodr_path)
+    laneGraph = LaneGraph(road_info,openDriveXml)
     length = len(laneGraph.lane_quad_list)
     mem = []
     for i in range(100):
@@ -109,6 +136,7 @@ if __name__ == '__main__':
                 mem.append(p)
                 print(laneGraph.lane_quad_list[start_idx] , "-->" , laneGraph.lane_quad_list[end_idx])
                 laneGraph.lane_graph_route_idx(start_idx,end_idx)
+                print(laneGraph.get_distance(laneGraph.lane_quad_list[start_idx] , laneGraph.lane_quad_list[end_idx]))
                 break 
         
         

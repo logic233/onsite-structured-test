@@ -1,12 +1,12 @@
-FRAGMENT:
-  tasks:
-        - '1103cutin46'
-  maxTestTime: 50
-  skipExist: False
-
-# REPLAY:
+# FRAGMENT:
 #   tasks:
-#       -    '14_6_left_left_8'
-
-#   visualize: True
+#         - '1103cutin46'
+#   maxTestTime: 50
 #   skipExist: False
+
+REPLAY:
+  tasks:
+      -  '1_316_merge_338'
+      -  '5_450_merge_457'
+  visualize: True
+  skipExist: False
