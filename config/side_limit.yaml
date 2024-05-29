@@ -6,12 +6,18 @@
 
 REPLAY:
   tasks:
-      # - '4_818_merge_828'
-      # - '1_1072_merge_1552'
-      # - '8_5_2_111'
-      - '1_316_merge_338'
-      # - '2_101_merge_107'
-      - '5_450_merge_457'
+        - '9_21_straight_straight_23'
+        - '8_5_2_111'
+        - '8_5_2_300'
 
-  visualize: False
+      # - '1_316_merge_338'
+      # - '2_101_merge_107'
+      # - '5_450_merge_457'
+      # 
+      # - 'highway_merge_3_1_115'
+      # - '0_261_merge_271'
+      # - '2_732_merge_733'
+      # - '6_1688_merge_1718'
+
+  visualize: True
   skipExist: False

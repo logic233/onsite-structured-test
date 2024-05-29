@@ -1,0 +1,15 @@
+REPLAY:
+  tasks:
+        # limit acc
+      # - '8_6_2_471'
+      # - '4_316_merge_320'
+      # - '6_1688_merge_1718'
+      # - '2_732_merge_733'
+      # - 'highway_merge_2_1_298'
+      # - '3_370_merge_374'
+      # -  '0_571_merge_573'  
+      # -   '6_48_straight_straight_49'
+      -  '13_19_straight_in_opposite_left_21'
+
+  visualize: True
+  skipExist: False

@@ -6,7 +6,16 @@
 
 REPLAY:
   tasks:
-      -  '1_316_merge_338'
-      -  '5_450_merge_457'
+      # too short
+      # -  '0_261_merge_271'
+      # -  '8_5_2_111'
+      # -  '1_672_merge_674'
+
+      # #  out of 
+      # -  '5_450_merge_457'
+      # #  car lane too long
+      -  '0_502_merge_503'
+
+      # -  '3_370_merge_374'
   visualize: True
   skipExist: False

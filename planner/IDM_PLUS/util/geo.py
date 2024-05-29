@@ -41,6 +41,16 @@ def get_great_sol(a,b,c):
     else:
         return (-b+math.sqrt(d))/(2*a)
 
+
+def no_intersection(list1, list2):
+    if list1 == None or list2 == None:
+        return True
+    for sublist1 in list1:
+        for sublist2 in list2:
+            if sublist1 == sublist2:
+                return False
+    return True
+
 lit_d = 0.0001
 
 if __name__ == '__main__':

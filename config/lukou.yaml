@@ -1,0 +1,26 @@
+# FRAGMENT:
+#   tasks:
+#         - '1103cutin46'
+#   maxTestTime: 50
+#   skipExist: False
+
+REPLAY:
+  tasks:
+      # - '0_495_merge_505'
+      # - '1_699_merge_703'
+      # 'already in '
+      # - '0_860_merge_863'
+      # - '0_856_merge_858'
+      - '1_378_merge_382'
+
+      #
+      # - '3_134_straight_straight_142'
+      # - '9_21_straight_straight_23'
+      # - '10_11_straight_in_adjacent_left_16'
+      # - '13_19_straight_in_opposite_left_21'
+      # 'qiguai'
+      # - '8_5_3_81'
+
+
+  visualize: True
+  skipExist: False

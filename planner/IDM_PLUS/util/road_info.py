@@ -209,11 +209,11 @@ def _get_exv(openDriveXml,s,lane_quad):
                 return max_exv
             r = abs(1/cur)
             if r < 15:
-                return 5
+                return 8
             if r < 30:
                 return 8
             if r < 50:
-                return 15
+                return 10
     return max_exv 
 
 def get_exv(openDriveXml,lane_quad):
@@ -222,10 +222,26 @@ def get_exv(openDriveXml,lane_quad):
         return ret
     for road in openDriveXml.roads:
         if road.id == lane_quad[0]:
-            times = 6
+            times = 5
+            tt = 0
             ret = 0
             for i in range(times):
                 s = road.length/times * i 
-                ret +=_get_exv(openDriveXml,s,lane_quad)
-            ret /= times
+                _exv = _get_exv(openDriveXml,s,lane_quad)
+                _tt = 1 if _exv > 12 else 3
+                ret += _exv * _tt
+                tt += _tt
+            ret /= tt
     return ret
+
+def get_r(openDriveXml,s,lane_quad):
+    if s == None:
+        return float("inf")
+    for road in openDriveXml.roads:
+        if road.id == lane_quad[0]:
+            cur = road._planView.get_curvature(s)
+            if cur ==0:
+                return float("inf")
+            r = abs(1/cur)
+            return r
+    return float("inf")

@@ -3,7 +3,7 @@ version: '3'
 services:
   TESSNG:
     build: .
-    image: logic233/gvgo4xkk:plus_v10p
+    image: logic233/gvgo4xkk:plus_v12
     container_name: onsite-structured-test
     environment:
       ALLOW_ANONYMOUS_LOGIN: 'yes'

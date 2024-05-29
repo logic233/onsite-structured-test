@@ -84,13 +84,13 @@ class LaneGraph():
         while True:
             pre_idx = predecessors[pre_idx]
             if pre_idx < 0 or pre_idx>len(self.lane_quad_list):
-                print("route_list [NO]")
+                # print("route_list [NO]")
                 break
             route_list.insert(0,self.lane_quad_list[pre_idx])
             if (pre_idx == start_idx):
                 break
-        print("###############[route_list]###############")
-        print(route_list)
+        # print("###############[route_list]###############")
+        # print(route_list)
         self.route_list = route_list
     
     def get_distance(self,start_quad,target_quad):
