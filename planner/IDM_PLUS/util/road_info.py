@@ -187,7 +187,7 @@ def get_lane_delta_t(openDriveXml,s,lane_quad):
             r = abs(1/cur)
             k = 1 if cur>0 else -1
             if r < 30:
-                return k * 0.5
+                return k * 0.7
             return k * 0.2
     return 0
 # 获得当前quad 在s处限速
@@ -209,11 +209,11 @@ def _get_exv(openDriveXml,s,lane_quad):
                 return max_exv
             r = abs(1/cur)
             if r < 15:
-                return 8
+                return 7
             if r < 30:
                 return 8
             if r < 50:
-                return 10
+                return 9
     return max_exv 
 
 def get_exv(openDriveXml,lane_quad):
@@ -235,7 +235,7 @@ def get_exv(openDriveXml,lane_quad):
     return ret
 
 def get_r(openDriveXml,s,lane_quad):
-    if s == None:
+    if s == None or lane_quad == None:
         return float("inf")
     for road in openDriveXml.roads:
         if road.id == lane_quad[0]:

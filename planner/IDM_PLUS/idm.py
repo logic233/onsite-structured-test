@@ -27,8 +27,12 @@ def printf_rot(*args, **kwargs):
 def printf_junction(*args, **kwargs):
     if False:
         printf(*args, **kwargs)
+def printf_idm(*args, **kwargs):
+    if True:
+        printf(*args, **kwargs)
+
 class IDM(PlannerBase):
-    def __init__(self, a_bound=5.0, exv=45, t=0.3,a=2.5, b=2.8, gama=2, s0=2.0, s1=0.5):
+    def __init__(self, a_bound=5.0, exv=45, t=0.2,a=2.5, b=2.8, gama=4, s0=2.0, s1=1):
         """跟idm模型有关的模型参数
         :param a_bound: 本车加速度绝对值的上下界
         :param exv: 期望速度
@@ -64,6 +68,11 @@ class IDM(PlannerBase):
         self.time_to_tar = 5
         self.junction_id  = None
         self.laneGraph = None
+        self.exv_want = None
+        
+        self.car_name_mem = set()
+        self.safety_cross_width_list = [1]
+        self.l_st_vst_ego = [1]
     def init(self, scenario_dict):
         printf("----------------------------IDM INIT----------------------------")
         printf(scenario_dict)
@@ -167,7 +176,11 @@ class IDM(PlannerBase):
         #     self.laneGraph.update_route_idx()
         quad_located = self.laneGraph.get_located_quad()
         printf("quad_located" , quad_located)
+        # 根据上个周期情况确定
+        # if self.exv_want != None:
+        #     self.exv = min(self.exv , self.exv_want)
         acc = self.deside_acc(state)
+        # self.exv_want = None
         # 带有设定期望时速的副作用
         rot = self.deside_rot(state,acc)
         printf("[self.exv]",self.exv)
@@ -183,7 +196,7 @@ class IDM(PlannerBase):
         # 如果在园内 远视
         # if (get_r(self.openDriveXml , _s , self.laneGraph.get_located_quad()) < 20):
         #     printf_rot("远视生效")
-        #     _max_time = 10* self.dt
+        #     _max_time = 3* self.dt
         #     up = updater(state[0][4] , _max_time / 5)
         #     _x_look = state[0][0]
         #     _y_look = state[0][1]
@@ -199,7 +212,6 @@ class IDM(PlannerBase):
         #             _t = t_look
                     
         rot_ans = 0
-        
         # # [test rot]
         yaw_planView = get_heading(self.openDriveXml, state[0][0] , state[0][1],quad_located)
         
@@ -213,17 +225,74 @@ class IDM(PlannerBase):
                 target_t = find_lane_mid_t(self.openDriveXml, _s , quad_located)
             if target_t==None:
                 return 0
+            printf("target_t",target_t)
+            # 在平路上考虑 根据前后方有无车的修正
+            change_ = True
+            delta = 0
+            if state[0][2] < 20:
+                consider_distance = 20
+            else:
+                consider_distance = 30
+            if get_r(self.openDriveXml , _s , quad_located) > 40:
+                target_t_in = -(target_t - _t)
+                for i in range(len(state)):
+                    if i == 0:
+                        continue
+                    printf("check rot" , state[i][-1])
+                    i_s , i_t = self.l_st_vst_ego[i][0] , self.l_st_vst_ego[i][1]
+                    if i_s == None or i_t == None:
+                        continue
+                    if  abs(i_s ) < state[0][4] /2 +state[i][4] /2 + 2 :
+                        printf("侧向临近车")
+                        #  外打
+                        if  abs(i_t) < self.safety_cross_width_list[i] + 1 :
+                            printf("有临近的车")
+                            k = -1 if i_t > _t else 1  
+                            t = 1
+                            if self.l_st_vst_ego[i][2] * self.l_st_vst_ego[i][1] < 0 :
+                                t = 1.5
+                            if abs(k * t) > abs(delta):
+                                delta = k * t
+                    # 正前方忽略
+                    if   abs(i_t) < state[0][5] /2 + 0.1 and state[0][2] < 10 and (self.l_st_vst_ego[i][2] * self.l_st_vst_ego[i][1] >= 0):
+                        printf("正前方车")
+                        continue
+                    
+                    #  只考虑对应地方
+                    if (i_s < consider_distance and i_s > 0) or (i_s <0 and i_s > -consider_distance/2):
+                        printf("侧向的车")
+                        printf("target_t , i_t , t" , round(target_t_in,2) , round(i_t,2))
+                        # target_t = target_t + self.safety_cross_width_list[i] * k
+                        #  有车不动
+                        if  (target_t_in  < i_t +2 and   i_t-2 < 0)  or    (target_t_in > i_t -2 and  i_t +2 > 0)    :
+                            # if a_cc >
+                            # tar_want = state[i][2]-1 if state[i][2] > 20 else state[i][2] * 0.9
+                            # if state[i][2] > 20:
+                            #     self.a_want = 0
+                            #     if  self.exv_want != None:
+                            #         self.exv_want = min(tar_want , self.exv_want)
+                            #     else:
+                            #         self.exv_want = tar_want
+                            printf("无法向目标行进")
+                            change_ = False
+
+                if not change_:
+                    target_t = _t + delta
+
+                
+                    
+
             offset_t = get_lane_delta_t(self.openDriveXml, _s , quad_located)
             target_t += offset_t
             printf_rot("_t -> target_t ",_t , target_t)
             offset_t = (target_t - _t)
             # 作为时速调整的副作用
-            if abs(offset_t) > 2:
-                self.exv = self.exv * 0.7
-            elif abs(offset_t) > 1.5:
-                self.exv = self.exv * 0.8
-            elif abs(offset_t) > 1:
-                self.exv = self.exv * 0.9
+            # if abs(offset_t) > 2:
+            #     self.exv_want = self.exv * 0.7
+            # elif abs(offset_t) > 1.5:
+            #     self.exv_want = self.exv * 0.8
+            # elif abs(offset_t) > 1:
+            #     self.exv_want = self.exv * 0.9
 
   
             # [PLAN A] #######################################
@@ -235,7 +304,10 @@ class IDM(PlannerBase):
             
             # [PLAN B ] ########################################
             # PID参数
-            Kp = 0.3
+            if state[0][2] > 15:
+                Kp = 1
+            else:
+                Kp = 0.5
             Ki = 0
             Kd = 0
 
@@ -243,7 +315,9 @@ class IDM(PlannerBase):
             pid = PID(Kp, Ki, Kd, setpoint=0)
             feedback = -offset_t
             control = pid.update(feedback, self.dt)
-            _vt_consier = control 
+            _vt_consier = control
+            # if any( abs(element[0] - state[0][0]) < 15 and abs(element[1] - state[0][1]) < 15    for element in state[1:]):
+            #     _vt_consier = 0
             # [PLAN B ] ########################################
             _yaw_consider = math.asin(  np.clip (_vt_consier / (state[0][2] + 1e-7) , -1, 1))
             # printf_rot("_yaw_consider yaw_planView" , _yaw_consider,yaw_planView)
@@ -269,18 +343,28 @@ class IDM(PlannerBase):
             # [质心偏移角] -0.32 <= 前轮转角 <= 0.32 
 
             # 5 -> 0.2    10 -> 0.1   12.5 -> 0.05
-            kk = 20
-            t0 = 0.24
+            kk = 40
+            if abs(acc) > 0.5:
+                kk = max (20 - (abs(acc) - 0.4) * 20 ,5)  
             if abs(acc) > 1:
+                kk = 5
+            t0 = 0.25
+            if abs(acc) > 0.2:
+                t0 = 0.24
+            if abs(acc) > 0.5:
                 t0 = 0.2
+            if abs(acc) > 1:
+                t0 = 0.17
             if abs(acc) > 2:
                 t0 = 0.1
-            rot_max =  min (math.atan(kk / ((state[0][2]  + self.a * self.dt) **2) ) , t0)
+            if abs(acc) > 3:
+                t0 = 0.001
+            rot_max =  min (math.atan(kk / ((state[0][2] + 0.5 * self.dt ) **2) ) , t0)
 
                 
             # rot_max = 0.5
             # [动力学约束] -1.4 <= 前轮转速转速 < 1.4
-            b1 = 0.5
+            b1 = 2
             k1 = 10
             t1 = 0.8
             k = min( b1 + k1 / (state[0][2] + 1e-7 ) , t1)
@@ -305,60 +389,75 @@ class IDM(PlannerBase):
         v, fv, dis_gap = self.getInformFront(state)
         s,t = get_st(self.openDriveXml , state[0][0] , state[0][1],self.laneGraph.get_located_quad())
         r = get_r(self.openDriveXml , s , self.laneGraph.get_located_quad()) 
-        gama = self.gama  if r>30 else self.gama /5
+        gama = self.gama  if r>15 else self.gama / 2
+        gama = self.gama 
+        gama = gama if v<20 else gama *2
+        idm_t = self.t if v<20 else 0.15
         # a = self.a if r>30 else  self.a/2
         b = self.b if r>30 else self.b / 2
-        printf_junction("r",r)
-        if dis_gap < 0 :
-            a_idm = self.a * (1 - (v / self.exv) ** gama)
-        else:
-            # 求解本车与前车的期望距离
-            # printf(self.s0,self.s1,self.exv,v,self.t)
-            self.s_ = self.s0 + self.s1 * (v / self.exv) ** 0.5 + \
-                max (self.t * v + v * (v - fv) / 2 / (self.a * b) ** 0.5 , 0)
-            # printf(self.s_  , "=" , self.s0 ,  self.s1 * (v / self.exv) ** 0.5 , self.t * v , v * (
-            #     v - fv) / 2 / (self.a * b) ** 0.5  )
-            # if abs (self.tar_y - state[0][1]) < 5 and abs(self.tar_x - state[0][0]) < self.s_ * 4:
-            #     dis_gap = 100
-            # 求解本车加速度
-            a_idm = self.a * (1 - (v / self.exv) ** gama - ((self.s_ / (dis_gap+1e-6)) ** 2))
-            
+        a_idm1 = 1
         #考虑前方路口减速 让行  
         if s != None :
             # r = 10000
-            d = (state[0][2]**2)/b/2 + state[0][2] * 0.3+4
-            _length  =  get_road_length(self.openDriveXml ,self.laneGraph.get_located_quad()) - s
+            d = (state[0][2]**2)/b/2 +0.3 * state[0][2] + 5
+            length_road = self.laneGraph.get_located_quad()
             # 只有在平路才考虑减速路口
-            if r >=30:
+            if r >=30 and length_road != None:
+                _length  =  get_road_length(self.openDriveXml ,length_road) - s
                 i = 1
                 printf_junction("d,_length",d,_length)
                 while d >= _length:
                     next_quad = self.laneGraph.get_located_quad_next_i(i)
                     printf_junction("d,_length,next_quad",d,_length,next_quad)
                     if next_quad != None:
-                        t_me = min((_length + 2) / (state[0][2] + 1e-9) , math.sqrt(2 * (_length + 2) / self.a ))
+                        if state[0][2] < 1 : 
+                            t_me = min((_length + 3) / (state[0][2] + 1e-9)  + 0.2, math.sqrt(2 * (_length + 3) / self.a )  + 0.4)
+                        else:
+                            t_me = (_length + 3) / (state[0][2] + 1e-9) + 0.2
                         printf_junction("开始check_juction",next_quad , t_me)
                         res = self.check_juction(state,next_quad , t_me)
                         _length += get_road_length(self.openDriveXml ,self.laneGraph.get_located_quad_next_i(i))
                         i+=1
-                        if not res:
+                        if not res and res != None:
                             printf_junction("[ATTENTION] 路口危险",next_quad)
                             if v > 2:
-                                a_idm = -self.b 
+                                a_idm1 = -self.b 
                             elif v >1:
-                                a_idm = -0.7 *self.b
+                                a_idm1 = -0.9 *self.b
                             elif v > 0.5:
-                                a_idm = -0.5 *self.b
+                                a_idm1 = -0.5 *self.b
                             break
+                        if res :
+                            gama = 10
+                            
                     else:
                         break
+    
+        printf_junction("r",r)
+        if dis_gap < 0 :
+            a_idm = self.a * (1 - (v / self.exv) ** gama)
+        else:
+            # 求解本车与前车的期望距离
+            # printf(self.s0,self.s1,self.exv,v,idm_t)
+            self.s_ = self.s0 + self.s1 * (v / self.exv) ** 0.5 + \
+                max (idm_t * v + v * (v - fv) / 2 / (self.a * b) ** 0.5 , 0)
+            # printf(self.s_  , "=" , self.s0 ,  self.s1 * (v / self.exv) ** 0.5 , idm_t * v , v * (
+            #     v - fv) / 2 / (self.a * b) ** 0.5  )
+            # if abs (self.tar_y - state[0][1]) < 5 and abs(self.tar_x - state[0][0]) < self.s_ * 4:
+            #     dis_gap = 100
+            # 求解本车加速度
+            a_idm = self.a * (1 - (v / self.exv) ** gama - ((self.s_ / (dis_gap+1e-6)) ** 2))
+            printf("self.s_ , dis_gap , a_idm",round(self.s_,2) , round(dis_gap,2),round(a_idm,2))
+            
+        if a_idm1 < 0 :
+            a_idm = a_idm1
         # 较慢加速
-        aa_max = state[0,6] + 30 * self.dt
-        aa_min = state[0,6] - 30 * self.dt
+        aa_max = state[0,6] + 40 * self.dt
+        aa_min = state[0,6] - 40 * self.dt
         # 对加速度进行约束
         a_idm = np.clip(a_idm, max(-self.a_bound,aa_min), min(self.a_bound , aa_max))
         # printf("#######  v,fv,dis_gap,a_idm ")
-        printf(v,fv,dis_gap,a_idm)
+        printf_idm(v,fv,dis_gap,a_idm)
         return a_idm
 
     def getInformFront(self, state: pd.DataFrame) :
@@ -373,25 +472,26 @@ class IDM(PlannerBase):
         exv = 100000
         exv_max = 50
         exv_inx = -1
-        l_st_vst = [[0,0,1,0]]
+        self.l_st_vst_ego = [[0,0,1,0]]
+        l_t =[0]
         l_length_ = [1]
-        l_safety_s = [1]
+        self.safety_cross_width_list = [1] 
         for i in range(1, len(state)):
             state_item = state[i]
             # 重新构建坐标系 s 方向ego车向
             _t , _s = get_xy_in_state(state_item[0] , state_item[1] , ego)
             
             yaw_i = range_yaw(state_item[3])
-            yaw_delta = yaw_i - ego[3]
+            yaw_delta = ego[3] - yaw_i  
             # 将目标车速度向ego车向分解为
             _vs = math.cos(yaw_delta) * state_item[2]
             _vt = math.sin(yaw_delta) * state_item[2] 
             s,t = get_st(self.openDriveXml , state[0][0] , state[0][1],self.laneGraph.get_located_quad())
             r = get_r(self.openDriveXml , s , self.laneGraph.get_located_quad()) 
             if(r<30):
-                l_st_vst.append([_s , _t ,state_item[2] ,state_item[2]])
+                self.l_st_vst_ego.append([_s , _t ,state_item[2] ,state_item[2]])
             else:
-                l_st_vst.append([_s , _t ,_vs ,_vt])
+                self.l_st_vst_ego.append([_s , _t ,_vs ,_vt])
             distance_2p = math.sqrt(_t** 2 +   _s** 2 ) 
 
             item_length  = state_item[4]
@@ -403,53 +503,61 @@ class IDM(PlannerBase):
             l_length_.append(length_)
             # 安全通过 两中心之间水平距离
             safety_cross_width = width_ + ego[5] /2 * 1.2
-            
+            self.safety_cross_width_list.append(safety_cross_width)
             # 需要控制ego 大于正方向车距 
             safety_s = ego[4] /2 + item_length/2 + ( v - _vs ) ** 2 /2 / self.a_bound  + ( v - _vs ) * self.dt * 3 + 8 
-            l_safety_s.append(safety_s)
-            quad_arr = find_in_road_lanesection_lane_arry(self.openDriveXml ,state_item[0] , state_item[1])
-            if no_intersection(quad_arr ,self.laneGraph.route_list ):
-                # printf("not in route",state_item[-1])
-                d_ind[i] = False 
-                continue
             # if _s < - (ego[4] /2 + item_length/2 + 1) and abs(_t) < 1:
             #     # 快跑
             #     return ego[2], -1, -1
-            if _s < 0 :
+            if _s < 0 or _vs < 0:
                 d_ind[i] = False 
                 continue           
             # 在安全车距外的车 忽略
-            # printf("===========\n",state_item[-1] , safety_s)
-            # printf("st",round(_s ,2 ) , round(_t ,2 ), "||  vst",round(_vs ,2 ) , round(_vt ,2 ))
+            # printf_idm("===========\n",state_item[-1] , safety_s)
+            # printf_idm("st",round(_s ,2 ) , round(_t ,2 ), "||  vst",round(_vs ,2 ) , round(_vt ,2 ))
             # if abs(_s) > safety_s:
             #     d_ind[i] = False 
-            #     printf("在安全车距外")
+            #     printf_idm("在安全车距外")
             #     continue                 
             # 在t方向上正在远离ego
-            if _t *  _vt >= 0  and (abs(_t) > safety_cross_width):
-                d_ind[i] = False 
-                # printf("在t方向上正在远离ego")
-                continue 
-            
+        
             # t方向上相遇
-            t_t = (abs(_t) + safety_cross_width ) / (abs(_vt) + 1e-7)
-            printf(state_item[-1],"t_t",t_t)
-            if t_t > 20 and  abs(_t) > safety_cross_width:
-                d_ind[i] = False 
-                # printf("保持平行行车")
-                continue        
+            dis_t = _t - safety_cross_width if _t >0 else _t + safety_cross_width
+            t_t = (0-dis_t) / (_vt + 1e-7) 
+            printf_idm("_t  safety_cross_width dis_t _vt " ,round( _t,2) , round(safety_cross_width,2), round(dis_t,2) ,round(_vt,2) )
+            if _t *  _vt >= 0  and (abs(_t) > safety_cross_width):  
+                if state[0][2] < 15 or  (abs(_t) > 1 * safety_cross_width):
+                    d_ind[i] = False 
+                    printf_idm("在t方向上正在远离ego")
+                    continue 
+            
 
+            d_s =  (_s - item_length /2 - ego[4] /2)
+            t_s = get_great_sol(ego[5] /2 , v-_vs , -d_s)
+            printf_idm(state_item[-1],"t_t t_s",t_t , t_s)
+            want_time = 3
+            if state[0][2] >5 :
+                want_time = 5
+            if state[0][2] >15 :
+                want_time = 7         
+            if t_t > want_time and  abs(_t) > safety_cross_width:
+                d_ind[i] = False 
+                printf_idm("保持平行行车")
+                continue        
+            quad_arr = find_in_road_lanesection_lane_arry(self.openDriveXml ,state_item[0] , state_item[1])
+            if no_intersection(quad_arr ,self.laneGraph.route_list )  and (  (abs(_t) > safety_cross_width and abs(_s) > 5) or r < 40 ):
+                # printf_idm("not in route",state_item[-1])
+                d_ind[i] = False 
+                continue
             if v > _vs :
                 # s方向上相遇
-                d_s =  (_s - item_length /2 - ego[4] /2)
-                t_s = get_great_sol(ego[5] /2 , v-_vs , -d_s)
-                printf("t_s",t_s)
                 # 放宽一点所以 *2
                 if t_s != None:
                     if abs(t_s * _vt + _t) > safety_cross_width   and \
-                    abs( (t_s+ 0.1) * _vt + _t) > safety_cross_width   :
+                    abs( (t_s+ 0.1) * _vt + _t) > safety_cross_width   and \
+                    abs( (t_s+ 0.2) * _vt + _t) > safety_cross_width and (state[0][2] < 15):
                         d_ind[i] = False 
-                        printf("安全超车/汇车")
+                        printf_idm("安全超车/汇车")
                         continue    
             # vsx = _vs - math.sqrt(2 * self.a_bound * ( safety_s - abs(_s)))
             # if vsx < exv:
@@ -457,16 +565,18 @@ class IDM(PlannerBase):
             #     exv_inx = i
         v, fv, dis_gap = ego[2], -1, -1
         if sum(d_ind) > 0:
-            # printf("+++ 前方的车",)
-            # printf(state[d_ind,:][:,-1])
+            # printf_idm("+++ 前方的车",)
+            # printf_idm(state[d_ind,:][:,-1])
             idx = d_ind.index(True)
             for i in range(1,len(state)):
                 if d_ind[i]:
-                    if l_st_vst[i][0] < l_st_vst[idx][0]:
+                    if self.l_st_vst_ego[i][0] - state[i][4]  < self.l_st_vst_ego[idx][0] - state[idx][4]  :
                         idx = i
-            fv = l_st_vst[idx][2]
-            dis_gap = l_st_vst[idx][0] - (ego[4] /2 + l_length_[idx]) 
-            printf("#",state[idx][-1],"#",fv,dis_gap)
+            fv = self.l_st_vst_ego[idx][2]
+            printf_idm("self.l_st_vst_ego[idx][0] - (ego[4] /2 + l_length_[idx]" , round(self.l_st_vst_ego[idx][0],2) , round(ego[4] /2,2)  ,round(l_length_[idx],2))
+            dis_gap = self.l_st_vst_ego[idx][0] - (ego[4] /2 + l_length_[idx]) 
+            printf_idm("#",state[idx][-1],"# fv dis_gap",fv,dis_gap)
+            self.car_name_mem.add(state[idx][-1])
         if dis_gap > 100:
             dis_gap = -1        
             fv = -1
@@ -474,12 +584,12 @@ class IDM(PlannerBase):
 
     def check_juction(self , state, target_quad , t_me):
         if target_quad == None :
-            return True
+            return None
         j_id = None
         for road in self.openDriveXml.roads:
             if road.id == target_quad[0]:
                 if road.junction == None or road.length > 25:
-                    return True
+                    return None
                 else:
                     j_id = road.junction.id
                     break
@@ -519,11 +629,11 @@ class IDM(PlannerBase):
                         yaw_view = range_yaw(get_heading(self.openDriveXml,x,y,quad) -math.pi)
                         delta_yaw = abs(yawi - yaw_view)
                         delta_yaw = min (delta_yaw , math.pi *2 - delta_yaw)
-                        if delta_yaw > 0.45:
+                        if delta_yaw > 0.45 or state[i][-1] in self.car_name_mem:
                             printf_junction("已被过滤",state[i][-1],quad)
                             continue
                         # 已有车在路口中
-                        if conn.connectingRoad == quad[0]:
+                        if conn.connectingRoad == quad[0] and get_distance(state[0][0],state[0][1] , state[i][0],state[i][1]) < 5:
                             printf_junction("发现已在路口",state[i][-1])
                             # break
                             return False

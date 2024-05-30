@@ -1,0 +1,41 @@
+FRAGMENT:
+  tasks:
+  # junction crash
+      -   '8_3_1_54'
+  # complex junction
+      -   '5_36_straight_in_adjacent_left_43'
+  # changelane
+    -   'highway_merge_2_2_92'
+    -   'highway_merge_2_2_115'
+    -   'highway_merge_2_2_123'
+
+  maxTestTime: 25
+  skipExist: True
+
+# SERIAL:
+#   tasks:
+#   dt: 0.1
+#   maxTestTime: 200
+#   skipExist: True
+
+REPLAY:
+  tasks:
+  # junction route problem
+      -   '14_1_straight_in_adjacent_left_2'
+      -   '8_1_straight_straight_3'
+  # changelane 变道考虑后方来车
+      -   'highway_merge_3_1_89'
+    # 避障？
+      -    '14_6_left_left_8'
+      -   '8_3_1_347'
+      -   '3_175_merge_186'
+      -   '1_621_merge_635'
+      -   '4_818_merge_828'
+      -   '5_66_merge_87'
+      -   'crossing_952_32_1'
+  # too hard row
+      -   '1_576_merge_585'
+  # too slow in row
+      -   '0_612_merge_619'   
+  visualize: False
+  skipExist: False
