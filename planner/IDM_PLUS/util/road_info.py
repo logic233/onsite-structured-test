@@ -245,3 +245,12 @@ def get_r(openDriveXml,s,lane_quad):
             r = abs(1/cur)
             return r
     return float("inf")
+
+def get_r_quad(openDriveXml,lane_quad):
+    if  lane_quad == None:
+        return float("inf")
+    ret = float("inf") 
+    for road in openDriveXml.roads:
+        if road.id == lane_quad[0]:
+            return road._planView.get_min_r()
+    return ret

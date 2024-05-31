@@ -338,3 +338,11 @@ class PlanView:
         print("[Error]",geo)
       return 0
     
+    def get_min_r(self): 
+      ret = float("inf")
+      for geo in  self._geometries:
+          if geo.length < 2:
+              continue
+          elif isinstance(geo,Arc):
+              ret = min( (1 / abs(geo.curvature) + 1e-7) ,ret) 
+      return ret
