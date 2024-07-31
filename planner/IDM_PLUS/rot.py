@@ -1,7 +1,7 @@
 import math
 
 def check_swing(ego_state,tar_rot , self_dt , self_rot):
-    v = ego_state[2] + self_dt* 2 * 5 
+    v = ego_state[2] + self_dt* 2  
     r = (v  / (ego_state[4] / 1.7) * math.tan(tar_rot) * self_dt + \
         (math.atan(math.tan(tar_rot) / 2) - math.atan(math.tan(tar_rot) / 2) ) ) * v 
     if abs(r) > 7 * self_dt:

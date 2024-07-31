@@ -12,9 +12,10 @@ from planner import PLANNER
 def main():
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-    with open('./config/tasks1.yaml', 'r') as f:
+    with open('./config/r50.yaml', 'r') as f:
         tasks = yaml.safe_load(f)
     for mode, config in tasks.items():
+        config["out"] = "outputs1"
         if mode != 'REPLAY':
             if not os.path.exists(os.path.join(BASE_DIR, 'TessNG', 'WorkSpace', 'Cert', '_cert')):
                 TessNG.run(mode, {})

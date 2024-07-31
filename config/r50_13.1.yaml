@@ -1,0 +1,38 @@
+FRAGMENT:
+  tasks:
+        #OK
+        # - '1103cutin46'
+
+        # - '5_27_straight_in_adjacent_left_29'
+  maxTestTime: 30
+  skipExist: False
+REPLAY:
+  tasks:
+
+
+
+          -  '10_11_straight_in_adjacent_left_16'
+
+          #  两种拐弯
+          -  '8_6_2_471'
+          -  '8_5_2_111'
+
+    #     tooslow
+          -  '0_499_merge_513'
+  #     tooslow
+          -  '1_699_merge_703'
+  #     tooslow
+          -  '0_495_merge_505'
+          -  '0_502_merge_503'
+
+
+          -  '0_402_merge_412'
+
+        #  变道追尾 抢了
+          -  '1_672_merge_674'
+
+          # OK
+            # -  '0_571_merge_573'
+
+  visualize: True
+  skipExist: False

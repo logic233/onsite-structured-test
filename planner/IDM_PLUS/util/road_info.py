@@ -187,7 +187,7 @@ def get_lane_delta_t(openDriveXml,s,lane_quad):
             r = abs(1/cur)
             k = 1 if cur>0 else -1
             if r < 30:
-                return k * 0.7
+                return k * 1
             return k * 0.2
     return 0
 # 获得当前quad 在s处限速

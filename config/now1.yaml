@@ -6,6 +6,7 @@ FRAGMENT:
 
   maxTestTime: 50
   skipExist: False
+FRAGMENT_7_5_130_straight_in_opposite_left_136
 
 # REPLAY:
 #   tasks:
@@ -14,3 +15,5 @@ FRAGMENT:
 #     -   '10_11_straight_in_adjacent_left_16'
 #   visualize: True
 #   skipExist: False
+REPLAY_14_0272follow243
+REPLAY_4_4_316_merge_320

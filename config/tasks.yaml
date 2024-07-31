@@ -1,7 +1,7 @@
-# FRAGMENT:
-#   tasks:
-#   maxTestTime: 25
-#   skipExist: True
+FRAGMENT:
+  tasks:
+  maxTestTime: 25
+  skipExist: True
 
 # SERIAL:
 #   tasks:
